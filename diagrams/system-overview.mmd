@@ -1,0 +1,27 @@
+---
+config:
+  layout: elk
+---
+flowchart TB
+    User["User"] -- Submit Recipe --> Interface["Interface Layer<br>CLI / API / Web UI"]
+    Interface --> Servers["Servers Module"] & Clients["Clients Module"] & Monitors["Monitors Module"] & Logs["Logs Module"] & Storage[("Data Storage<br>Metrics / Logs / Results")]
+    Servers --> Cluster["Cluster<br>SLURM / Kubernetes"]
+    Clients --> Cluster
+    Monitors --> Cluster & Storage
+    Logs --> Cluster & Storage
+    Cluster --> Services["Services Under Test<br>Storage / Inference / Vector DB"]
+     User:::userStyle
+     Interface:::interfaceStyle
+     Servers:::moduleStyle
+     Clients:::moduleStyle
+     Monitors:::moduleStyle
+     Logs:::moduleStyle
+     Cluster:::clusterStyle
+     Services:::serviceStyle
+     Storage:::storageStyle
+    classDef userStyle fill:#e1f5ff,stroke:#0066cc,stroke-width:3px
+    classDef interfaceStyle fill:#fff4e6,stroke:#ff9900,stroke-width:3px
+    classDef moduleStyle fill:#e6f7ff,stroke:#0099cc,stroke-width:2px
+    classDef clusterStyle fill:#f0f0f0,stroke:#666666,stroke-width:3px
+    classDef serviceStyle fill:#e6ffe6,stroke:#009900,stroke-width:2px
+    classDef storageStyle fill:#ffe6f0,stroke:#cc0066,stroke-width:2px

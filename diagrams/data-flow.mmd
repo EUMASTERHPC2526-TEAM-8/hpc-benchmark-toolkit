@@ -1,0 +1,82 @@
+sequenceDiagram
+    participant User
+    participant Interface as Interface Layer
+    participant Servers as Servers Module
+    participant Clients as Clients Module
+    participant Monitors as Monitors Module
+    participant Logs as Logs Module
+    participant Cluster as Cluster<br/>(SLURM/K8S)
+    participant Service as Service Container
+    
+    autonumber
+    
+    Note over User,Service: Phase 1: Initialization
+    User->>Interface: Submit recipe.yaml
+    Interface->>Interface: Validate recipe
+    Interface-->>User: Validation result
+    
+    Note over User,Service: Phase 2: Service Deployment
+    Interface->>Servers: start_service(config)
+    Servers->>Cluster: Deploy service container
+    activate Cluster
+    Cluster->>Service: Spawn & Initialize
+    activate Service
+    Service-->>Cluster: Ready
+    deactivate Cluster
+    Cluster-->>Servers: Service ready + endpoint
+    Servers->>Service: Health check
+    Service-->>Servers: Healthy
+    Servers-->>Interface: Service ready
+    
+    Note over User,Service: Phase 3: Monitoring & Logging Setup
+    Interface->>Monitors: start_monitor(targets)
+    Monitors->>Cluster: Deploy monitoring
+    Cluster-->>Monitors: Monitors ready
+    
+    Interface->>Logs: start_logger(sources)
+    Logs->>Cluster: Deploy log collectors
+    Cluster-->>Logs: Loggers ready
+    
+    Note over User,Service: Phase 4: Client Launch
+    Interface->>Clients: start_clients(endpoint)
+    Clients->>Cluster: Deploy client containers
+    Cluster-->>Clients: Clients ready
+    
+    Note over User,Service: Phase 5: Execution (Benchmark Running)
+    loop Benchmark Duration
+        par Parallel Client Requests
+            Clients->>Service: Client 1 → Requests
+            Clients->>Service: Client 2 → Requests
+            Clients->>Service: Client 3 → Requests
+            Clients->>Service: Client N → Requests
+        end
+        par Parallel Responses
+            Service-->>Clients: Client 1 ← Response
+            Service-->>Clients: Client 2 ← Response
+            Service-->>Clients: Client 3 ← Response
+            Service-->>Clients: Client N ← Response
+        end
+        Monitors->>Service: Scrape metrics
+        Logs->>Service: Collect logs
+    end
+    
+    Note over User,Service: Phase 6: Teardown
+    Interface->>Clients: stop_clients()
+    Clients->>Cluster: Terminate clients
+    Cluster-->>Clients: Clients stopped
+    
+    Interface->>Servers: stop_service()
+    Servers->>Cluster: Terminate service container
+    Cluster->>Service: Terminate
+    deactivate Service
+    Cluster-->>Servers: Service stopped
+    
+    Interface->>Monitors: stop_monitor()
+    Monitors-->>Interface: Final metrics
+    
+    Interface->>Logs: stop_logger()
+    Logs-->>Interface: Final logs
+    
+    Note over User,Service: Phase 7: Report Generation
+    Interface->>Interface: Generate report
+    Interface-->>User: Experiment report
