@@ -11,7 +11,7 @@ A recipe is a YAML file with the following top-level fields:
 ```yaml
 scenario: unique_name
 partition: gpu
-account: pXXXXX
+account: p200981
 qos: normal
 repetitions: 3
 resources:
@@ -49,7 +49,7 @@ Unique identifier for the benchmark scenario. Appears in results directories.
 ### partition / account / qos
 Slurm scheduling parameters:
 - `partition`: Which Slurm partition (e.g., `gpu`, `cpu`).
-- `account`: Your MeluXina project account (e.g., `p123456`).
+- `account`: Your MeluXina project account (e.g., `p200981`).
 - `qos`: Optional QoS class (e.g., `normal`, `debug`).
 
 ### repetitions
@@ -123,7 +123,7 @@ Arrays in fields (`batch: [1,4,8]`, `concurrency: [1,8,32]`) expand into multipl
 ```yaml
 scenario: llm_vllm_baseline
 partition: gpu
-account: p123456
+account: p200981
 resources:
   nodes: 1
   gpus: 1
@@ -149,7 +149,7 @@ binds:
 ```yaml
 scenario: postgres_micro
 partition: cpu
-account: p123456
+account: p200981
 resources:
   nodes: 1
   gpus: 0
