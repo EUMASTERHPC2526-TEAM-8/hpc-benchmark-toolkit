@@ -1,0 +1,74 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: Benchmark Recipe Schema
+type: object
+required: [scenario, partition, account, resources, workload]
+properties:
+  scenario:
+    type: string
+    description: Unique scenario identifier
+  partition:
+    type: string
+    description: Slurm partition to submit jobs to
+  account:
+    type: string
+    description: Slurm project account ID
+  qos:
+    type: string
+    description: Optional Slurm QoS setting
+  repetitions:
+    type: integer
+    minimum: 1
+    default: 1
+  resources:
+    type: object
+    required: [nodes, gpus, cpus_per_task, mem_gb]
+    properties:
+      nodes: { type: integer, minimum: 1 }
+      gpus: { type: integer, minimum: 0 }
+      cpus_per_task: { type: integer, minimum: 1 }
+      mem_gb: { type: integer, minimum: 1 }
+  workload:
+    type: object
+    required: [component, service]
+    properties:
+      component:
+        type: string
+        enum: [storage, inference, vectordb]
+      service:
+        type: string
+        enum: [triton, vllm, postgres, s3, milvus, faiss, weaviate, chroma, fileio]
+      model:
+        type: string
+        description: Model name (for inference workloads)
+      prompt_len:
+        type: [integer, array]
+        description: Prompt length(s) for inference
+      gen_tokens:
+        type: [integer, array]
+        description: Generated tokens per request
+      batch:
+        type: [integer, array]
+        description: Batch size(s)
+      concurrency:
+        type: [integer, array]
+        description: Concurrency levels
+      dataset:
+        type: string
+        description: Path to dataset (optional)
+  artifacts:
+    type: object
+    required: [container]
+    properties:
+      container: { type: string, description: Path to .sif container }
+      dataset: { type: string, description: Path to dataset (optional) }
+  binds:
+    type: array
+    description: List of bind mounts for Apptainer
+    items: { type: string }
+  metadata:
+    type: object
+    description: Optional reproducibility info
+    properties:
+      seed: { type: integer, description: Random seed }
+      git_commit: { type: string, description: Git commit hash }
+      notes: { type: string, description: Free-form notes }
