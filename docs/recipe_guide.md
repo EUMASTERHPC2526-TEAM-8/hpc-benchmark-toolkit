@@ -96,7 +96,7 @@ Optional metadata for reproducibility and tracking:
 - Container paths must end in `.sif`.
 - If `gpus > 0`, partition should be `gpu`.
 
-Validation is performed by the **Interface module** using the schema in `schemas/recipe-format.yaml`.
+Validation is performed by the **Interface module** using the schema in [recipe-format.yaml](../schemas/recipe-format.yaml).
 
 ---
 
