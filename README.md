@@ -31,7 +31,7 @@ A unified benchmarking framework for evaluating AI Factory components on the Mel
   - External services and tools
   - Development environment setup
 
-- **[`docs/recipe-guide.md`](docs/recipe-guide.md)** - Recipe Configuration Guide
+- **[`docs/recipe-guide.md`](docs/recipe_guide.md)** - Recipe Configuration Guide
   - Recipe format and structure
   - Configuration options and parameters
   - Example recipes for common scenarios
