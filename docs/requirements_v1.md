@@ -8,6 +8,7 @@
   - Vector databases (Chroma, FAISS, Milvus, Weaviate)
 - **Primary outputs**: comparable metrics (throughput, latency, resource usage, scalability), automated job orchestration, dashboards, and final reports.
 
+
 ## 1. Definitions
 - **Trial**: a single benchmark run with a fixed configuration.
 - **Scenario**: a set of trials varying one or more parameters (e.g., GPUs, batch size, concurrency).
