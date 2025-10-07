@@ -1,0 +1,8 @@
+# Invalid YAML syntax - missing closing quote
+scenario: "test-invalid-yaml
+partition: "gpu"
+account: test-account"
+
+orchestration:
+  mode: slurm"
+  total_nodes: 8

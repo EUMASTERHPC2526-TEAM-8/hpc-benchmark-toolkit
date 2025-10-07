@@ -1,0 +1,377 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: Benchmark Recipe Schema
+type: object
+required: [scenario, partition, account, resources, workload, orchestration]
+properties:
+  scenario:
+    type: string
+    description: Unique scenario identifier
+  
+  partition:
+    type: string
+    description: Slurm partition to submit jobs to
+  
+  account:
+    type: string
+    description: Slurm project account ID
+  
+  qos:
+    type: string
+    description: Optional Slurm QoS setting
+  
+  repetitions:
+    type: integer
+    minimum: 1
+    default: 1
+  
+  # NEW: Orchestration configuration for unified job submission
+  orchestration:
+    type: object
+    required: [mode, total_nodes, node_allocation]
+    properties:
+      mode:
+        type: string
+        enum: [slurm, kubernetes]
+        description: Orchestration backend
+      
+      total_nodes:
+        type: integer
+        minimum: 2
+        description: Total nodes for entire experiment (servers + clients + monitor)
+      
+      node_allocation:
+        type: object
+        required: [servers, clients, monitors]
+        properties:
+          servers:
+            type: object
+            required: [nodes]
+            properties:
+              nodes:
+                type: integer
+                minimum: 1
+                description: Number of nodes for server containers
+              node_range:
+                type: string
+                description: "Explicit node range (e.g., '0-2' or 'node[001-003]')"
+          
+          clients:
+            type: object
+            required: [nodes]
+            properties:
+              nodes:
+                type: integer
+                minimum: 1
+                description: Number of nodes for client workload generation
+              clients_per_node:
+                type: integer
+                minimum: 1
+                default: 1
+                description: Number of client processes per node
+              node_range:
+                type: string
+                description: "Explicit node range for clients"
+              distribution_strategy:
+                type: string
+                enum: [round-robin, random, all-to-all, static]
+                default: round-robin
+                description: How clients distribute requests across servers
+              target_mapping:
+                type: array
+                description: "Static client-to-server mapping (for 'static' strategy)"
+                items:
+                  type: object
+                  properties:
+                    client_group:
+                      type: string
+                    server_endpoints:
+                      type: array
+                      items: { type: string }
+          
+          monitors:
+            type: object
+            required: [nodes]
+            properties:
+              nodes:
+                type: integer
+                minimum: 1
+                maximum: 1
+                default: 1
+                description: Dedicated monitoring node (typically 1)
+              node_range:
+                type: string
+                description: "Node for monitoring"
+      
+      job_config:
+        type: object
+        properties:
+          time_limit:
+            type: string
+            pattern: "^[0-9]{2}:[0-9]{2}:[0-9]{2}$"
+            default: "02:00:00"
+            description: "Maximum job runtime (HH:MM:SS)"
+          
+          exclusive:
+            type: boolean
+            default: true
+            description: Request exclusive node access
+          
+          reservation:
+            type: string
+            description: "Slurm reservation name (optional)"
+  
+  # UPDATED: Resources now split by component
+  resources:
+    type: object
+    required: [servers, clients]
+    properties:
+      servers:
+        type: object
+        required: [gpus, cpus_per_task, mem_gb]
+        properties:
+          gpus: 
+            type: integer
+            minimum: 0
+            description: GPUs per server node
+          cpus_per_task: 
+            type: integer
+            minimum: 1
+          mem_gb: 
+            type: integer
+            minimum: 1
+      
+      clients:
+        type: object
+        required: [cpus_per_task, mem_gb]
+        properties:
+          gpus: 
+            type: integer
+            minimum: 0
+            default: 0
+            description: GPUs per client node (usually 0)
+          cpus_per_task: 
+            type: integer
+            minimum: 1
+          mem_gb: 
+            type: integer
+            minimum: 1
+      
+      monitors:
+        type: object
+        properties:
+          cpus_per_task: 
+            type: integer
+            minimum: 1
+            default: 4
+          mem_gb: 
+            type: integer
+            minimum: 1
+            default: 8
+  
+  # UPDATED: Workload configuration
+  workload:
+    type: object
+    required: [component, service, duration]
+    properties:
+      component:
+        type: string
+        enum: [storage, inference, vectordb]
+      
+      service:
+        type: string
+        enum: [triton, vllm, postgres, s3, milvus, faiss, weaviate, chroma, fileio]
+      
+      duration:
+        type: string
+        pattern: "^[0-9]+[smh]$"
+        description: "Workload duration (e.g., '10m', '2h', '300s')"
+      
+      warmup:
+        type: string
+        pattern: "^[0-9]+[smh]$"
+        default: "30s"
+        description: "Warmup period before metrics collection"
+      
+      # Inference-specific
+      model:
+        type: string
+        description: Model name (for inference workloads)
+      
+      prompt_len:
+        type: [integer, array]
+        description: Prompt length(s) for inference
+      
+      gen_tokens:
+        type: [integer, array]
+        description: Generated tokens per request
+      
+      batch:
+        type: [integer, array]
+        description: Batch size(s)
+      
+      # Load generation
+      concurrency:
+        type: [integer, array]
+        description: Concurrency levels (deprecated - use clients config)
+      
+      target_rps:
+        type: integer
+        description: Target requests per second across all clients
+      
+      request_distribution:
+        type: string
+        enum: [constant, poisson, burst]
+        default: constant
+        description: Request arrival pattern
+      
+      # Data
+      dataset:
+        type: string
+        description: Path to dataset (optional)
+  
+  # NEW: Server configuration
+  servers:
+    type: object
+    properties:
+      health_check:
+        type: object
+        properties:
+          enabled:
+            type: boolean
+            default: true
+          timeout:
+            type: integer
+            default: 60
+            description: Seconds to wait for server readiness
+          interval:
+            type: integer
+            default: 5
+            description: Health check interval in seconds
+          endpoint:
+            type: string
+            description: Health check endpoint path
+      
+      service_config:
+        type: object
+        description: Service-specific configuration parameters
+        additionalProperties: true
+  
+  # NEW: Monitoring configuration
+  monitoring:
+    type: object
+    properties:
+      enabled:
+        type: boolean
+        default: true
+      
+      metrics:
+        type: array
+        items:
+          type: object
+          required: [type]
+          properties:
+            type:
+              type: string
+              enum: [prometheus, gpu, system, custom]
+            scrape_interval:
+              type: string
+              default: "5s"
+            targets:
+              type: array
+              items:
+                type: string
+                enum: [servers, clients, all]
+      
+      retention:
+        type: string
+        default: "7d"
+        description: Metrics retention period
+  
+  # NEW: Logging configuration
+  logging:
+    type: object
+    properties:
+      enabled:
+        type: boolean
+        default: true
+      
+      aggregation:
+        type: string
+        enum: [centralized, distributed]
+        default: centralized
+      
+      categories:
+        type: array
+        items:
+          type: string
+          enum: [application, system, benchmark, infrastructure]
+        default: [application, benchmark]
+      
+      format:
+        type: string
+        enum: [json, text]
+        default: json
+      
+      retention:
+        type: string
+        default: "7d"
+  
+  artifacts:
+    type: object
+    required: [container]
+    properties:
+      container: 
+        type: string
+        description: Path to .sif container
+      
+      dataset: 
+        type: string
+        description: Path to dataset (optional)
+  
+  binds:
+    type: array
+    description: List of bind mounts for Apptainer
+    items: { type: string }
+  
+  # NEW: Reporting configuration
+  reporting:
+    type: object
+    properties:
+      formats:
+        type: array
+        items:
+          type: string
+          enum: [pdf, json, csv, html]
+        default: [json, csv]
+      
+      include:
+        type: array
+        items:
+          type: string
+          enum: [metrics_summary, performance_graphs, resource_utilization, raw_data]
+        default: [metrics_summary, performance_graphs]
+      
+      output_directory:
+        type: string
+        default: "/experiments/{experiment_id}"
+  
+  metadata:
+    type: object
+    description: Optional reproducibility info
+    properties:
+      seed: 
+        type: integer
+        description: Random seed
+      
+      git_commit: 
+        type: string
+        description: Git commit hash
+      
+      notes: 
+        type: string
+        description: Free-form notes
+      
+      tags:
+        type: array
+        items: { type: string }
+        description: Searchable tags for experiment categorization

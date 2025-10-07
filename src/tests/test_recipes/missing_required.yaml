@@ -1,0 +1,27 @@
+# Recipe missing multiple required top-level fields
+scenario: "test-missing-required"
+# Missing 'partition'
+# Missing 'account'
+
+orchestration:
+  mode: "slurm"
+  total_nodes: 8
+  node_allocation:
+    servers:
+      nodes: 3
+    clients:
+      nodes: 4
+      clients_per_node: 10
+    monitors:
+      nodes: 1
+
+# Missing 'resources'
+
+workload:
+  component: "inference"
+  service: "vllm"
+  duration: "10m"
+  model: "test-model"
+  prompt_len: 512
+
+# Missing 'artifacts'x
