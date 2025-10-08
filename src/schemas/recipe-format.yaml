@@ -354,24 +354,3 @@ properties:
       output_directory:
         type: string
         default: "/experiments/{experiment_id}"
-  
-  metadata:
-    type: object
-    description: Optional reproducibility info
-    properties:
-      seed: 
-        type: integer
-        description: Random seed
-      
-      git_commit: 
-        type: string
-        description: Git commit hash
-      
-      notes: 
-        type: string
-        description: Free-form notes
-      
-      tags:
-        type: array
-        items: { type: string }
-        description: Searchable tags for experiment categorization
