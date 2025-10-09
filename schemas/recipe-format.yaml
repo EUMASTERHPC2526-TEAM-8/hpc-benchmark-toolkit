@@ -180,7 +180,7 @@ properties:
       
       service:
         type: string
-        enum: [triton, vllm, postgres, s3, milvus, faiss, weaviate, chroma, fileio]
+        enum: [triton, vllm, postgres, s3, milvus, faiss, weaviate, chroma, fileio, ollama]
       
       duration:
         type: string
