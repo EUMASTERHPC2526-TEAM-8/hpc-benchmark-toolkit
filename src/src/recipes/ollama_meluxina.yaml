@@ -8,19 +8,18 @@ qos: "default"
 
 # HPC modules to load
 modules:
-  - "Python/3.11.10-GCCcore-13.3.0"
   - "Apptainer"
 
 orchestration:
   mode: "slurm"
-  total_nodes: 1
+  total_nodes: 2
   node_allocation:
     servers:
       nodes: 1
     clients:
-      nodes: 0
+      nodes: 1
     monitors:
-      nodes: 0
+      nodes: 1
   job_config:
     time_limit: "02:00:00"
     exclusive: true
@@ -52,8 +51,13 @@ servers:
     gpu_layers: 0
 
 artifacts:
-  # Container will be auto-pulled here if it doesn't exist
-  container: "/project/home/p200776/team8/containers/ollama_latest.sif"
+  containers_dir: "/project/home/p200776/team8/containers/"
+  service:
+    path: "ollama_latest.sif"
+    remote: "docker://ollama/ollama:latest"
+  python:
+    path: "python_3_12_3_v2.sif"
+    remote: "docker://python:3.12.3-slim"
 
 binds:
   # Ollama stores models here
