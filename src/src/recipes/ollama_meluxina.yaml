@@ -2,7 +2,7 @@
 # Recommended paths for MeluXina HPC cluster
 
 scenario: "ollama-meluxina-test"
-partition: "cpu"
+partition: "gpu"
 account: "p200776"
 qos: "default"
 
@@ -26,18 +26,19 @@ orchestration:
 
 resources:
   servers:
-    gpus: 0
-    cpus_per_task: 8
+    gpus: 1
+    cpus_per_task: 1
     mem_gb: 32
   clients:
-    gpus: 0
-    cpus_per_task: 0
+    gpus: 1
+    cpus_per_task: 2
     mem_gb: 16
 
 workload:
   component: "inference"
   service: "ollama"
-  duration: "10m"
+  clients_per_node: 10
+  duration: "2m"
   warmup: "1m"
   model: "llama2"
 

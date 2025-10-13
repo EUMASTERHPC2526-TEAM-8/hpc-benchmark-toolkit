@@ -1,11 +1,25 @@
 #!/usr/bin/env python3
+"""
+Generate SLURM sbatch script for benchmark execution.
+
+This script generates an sbatch file that:
+1. Starts service containers (e.g., Ollama) on server nodes
+2. Starts workload executor containers on client nodes
+3. Runs the orchestrator to coordinate the benchmark
+
+Uses the new class-based architecture:
+- OllamaWorkloadExecutor (runs on client nodes)
+- BenchmarkOrchestrator (coordinates the benchmark)
+"""
 import sys
 import yaml
+import json
+import os
 from pathlib import Path
 from datetime import datetime
 from module_config import get_modules_for_recipe
 
-CLIENT_PORT = 6000  # Default port for client servers
+CLIENT_PORT = 6000  # Default port for client workload executor servers
 
 def load_recipe(recipe_path):
     with open(recipe_path, "r") as f:
@@ -20,8 +34,15 @@ def generate_sbatch(recipe, output_path):
     container_dir = recipe["artifacts"]["containers_dir"]
     service_image = recipe["artifacts"]["service"]
     python_image = recipe["artifacts"]["python"]
+    
     model = recipe["workload"].get("model", "")
-    cpus = recipe["resources"]["servers"].get("cpus_per_task", 1)
+    service_type = recipe["workload"].get("service", "ollama")
+    clients_per_node = int(recipe["workload"].get("clients_per_node", 1))
+    duration = recipe["workload"].get("duration", "10m")
+
+
+    cpus_server = recipe["resources"]["servers"].get("cpus_per_task", 1)
+    cpus_clients = recipe["resources"]["clients"].get("cpus_per_task", 1)
     mem = recipe["resources"]["servers"].get("mem_gb", 4)
     partition = recipe["partition"]
     account = recipe["account"]
@@ -33,6 +54,52 @@ def generate_sbatch(recipe, output_path):
 
     service_image_path = f"{container_dir}/{service_image['path']}"
     python_image_path = f"{container_dir}/{python_image['path']}"
+
+    # Service-specific server ports and launch commands
+    service_configs = {
+        "ollama": {
+            "port": 11434,
+            "launch_cmd": "export OLLAMA_HOST=0.0.0.0:11434; ollama serve;",
+            "use_gpu": True
+        },
+        "postgres": {
+            "port": 5432,
+            "launch_cmd": "docker-entrypoint.sh postgres",
+            "use_gpu": False
+        },
+        "vllm": {
+            "port": 8000,
+            "launch_cmd": "python -m vllm.entrypoints.api_server --host 0.0.0.0 --port 8000",
+            "use_gpu": True
+        },
+        "vectordb": {
+            "port": 19530,
+            "launch_cmd": "milvus run standalone",
+            "use_gpu": False
+        }
+    }
+
+    workload_config = {
+        "model": model,
+        "duration": duration,
+        "clients_per_node": clients_per_node
+    }
+    config_path = "config/workload_config.json"
+    config_dir = os.path.dirname(config_path)
+    if config_dir and not os.path.exists(config_dir):
+        os.makedirs(config_dir, exist_ok=True)
+    with open(config_path, "w") as f:
+        json.dump(workload_config, f)
+
+    service_config = service_configs.get(service_type, {
+        "port": 8000,
+        "launch_cmd": "echo 'Unknown service type'",
+        "use_gpu": False
+    })
+
+    server_port = service_config["port"]
+    server_launch_cmd = service_config["launch_cmd"]
+    gpu_flag = "--nv" if service_config["use_gpu"] else ""
 
         # Only pull service image if location file does not exist
     check_service_image = f"""
@@ -56,8 +123,9 @@ fi
 #SBATCH --account={account}
 #SBATCH --nodes={total_nodes}
 #SBATCH --ntasks={total_nodes}
-#SBATCH --cpus-per-task={cpus}
+#SBATCH --cpus-per-task={max(cpus_server, cpus_clients)}
 #SBATCH --qos=default
+#SBATCH --gres=gpu:{recipe["resources"]["servers"]["gpus"]}
 #SBATCH --mem={mem}G
 #SBATCH --time={time_limit}
 #SBATCH --output=logs/{experiment_id}_%j.out
@@ -84,38 +152,53 @@ echo "Orchestrator node: $ORCH_NODE"
 {check_service_image}
 {check_python_image}
 
-echo "Starting services on $SERVER_NODE_LIST..."
+echo "Starting {service_type} services on $SERVER_NODE_LIST..."
 
-# Launch Ollama containers on server nodes
+# Launch service containers on server nodes
+# Service-specific command and port are determined by the service type
 for NODE in $SERVER_NODE_LIST; do
-    srun --nodes=1 --nodelist=$NODE --cpus-per-task={cpus} --output=$OUTPUT_DIR/container_${{NODE}}.log \\
-        bash -c "apptainer exec --nv {service_image_path} bash -c 'export OLLAMA_HOST=0.0.0.0:11434; ollama serve & sleep 5;'" &
+    srun --nodes=1 --ntasks=1 --gpus={recipe["resources"]["servers"]["gpus"]} --nodelist=$NODE --cpus-per-task={cpus_server} --output=$OUTPUT_DIR/container_${{NODE}}.log \\
+        bash -c "apptainer exec {gpu_flag} {service_image_path} bash -c '{server_launch_cmd}'" &
     pids+=($!)
 done
 
-echo "Starting clients on $CLIENT_NODE_LIST..."
+echo "Waiting 5 seconds for service executors to start..."
+sleep 5
 
-# Launch Python containers on client nodes (if any)
-for NODE in $CLIENT_NODE_LIST; do
-    srun --nodes=1 --nodelist=$NODE --ntasks=1 --cpus-per-task={cpus} --output=$OUTPUT_DIR/client_${{NODE}}.log \\
-        bash -c "apptainer exec {python_image_path} bash -c 'pip install flask && python3 -m benchmark.clients.ollama_client --port {CLIENT_PORT}'" &
-    pids+=($!)
-done
+echo "Starting workload executor servers on $CLIENT_NODE_LIST..."
 
-echo "Waiting 5 seconds for client nodes to start..."
+    # Launch workload executor servers on client nodes
+    # These run the general workload_executor entry point and select the correct service implementation
+    for NODE in $CLIENT_NODE_LIST; do
+        srun --nodes=1 --nodelist=$NODE --ntasks=1 --cpus-per-task={cpus_clients} --output=$OUTPUT_DIR/client_${{NODE}}.log \
+            bash -c "apptainer exec {python_image_path} bash -c 'pip install flask && python3 -m benchmark.workload.workload_executor --service {service_type} --port {CLIENT_PORT}'" &
+        pids+=($!)
+    done
+
+echo "Waiting 5 seconds for workload executor servers to start..."
 sleep 5
 
 echo "Starting orchestrator on $ORCH_NODE..."
 
-# Launch orchestrator health check on orchestrator node
-srun --nodes=1 --nodelist=$ORCH_NODE --ntasks=1 --cpus-per-task=1 --output=$OUTPUT_DIR/orchestrator.log \
-    bash -c "apptainer exec {python_image_path} bash -c 'python3 -m benchmark.orchestrator --server-nodes $SERVER_NODE_LIST --client-nodes $CLIENT_NODE_LIST --client-port {CLIENT_PORT} --model {model} --timeout 600 || echo 'Orchestrator failed''"
+# Launch orchestrator on orchestrator node
+# The orchestrator uses the new class-based architecture:
+# 1. Creates ServerManager (service-specific) to verify servers and prepare service
+# 2. Creates WorkloadController (service-specific) to coordinate client execution
+srun --nodes=1 --nodelist=$ORCH_NODE --ntasks=1 --cpus-per-task=1 --output=$OUTPUT_DIR/orchestrator.log \\
+    bash -c "apptainer exec {python_image_path} bash -c \\
+    'python3 -m benchmark.orchestrator \\
+        --server-nodes $SERVER_NODE_LIST \\
+        --client-nodes $CLIENT_NODE_LIST \\
+        --client-port {CLIENT_PORT} \\
+        --server-port {server_port} \\
+        --workload-config-file {config_path} \\
+        --timeout 600 || echo Orchestrator failed'"
 orchestrator_pid=$!
 pids+=($!)
 
 echo "Nodes launched, waiting for orchestrator to finish..."
 
-wait
+wait orchestrator_pid
 echo "Experiment complete."
 
 """
