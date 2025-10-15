@@ -1,0 +1,27 @@
+# Ignore Python bytecode cache directories
+# Matches __pycache__ at any level
+__pycache__/
+**/__pycache__/
+
+# Ignore compiled Python files
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# pytest cache
+.pytest_cache/
+
+# Editor temp files (optional)
+*.swp
+*.swo

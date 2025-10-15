@@ -1,0 +1,32 @@
+# Recipe with blocking errors only
+scenario: "test-errors"
+partition: "gpu"
+# ERROR: Missing required field 'account'
+
+orchestration:
+  mode: "slurm"
+  total_nodes: 10  # ERROR: Mismatch with node allocation (3+4+1=8)
+  node_allocation:
+    servers:
+      nodes: 3
+    clients:
+      nodes: 4
+      clients_per_node: 10
+    monitors:
+      nodes: 1
+
+resources:
+  servers:
+    gpus: -1  # ERROR: Negative GPU count
+    cpus_per_task: 0  # ERROR: Must be at least 1
+    mem_gb: 0  # ERROR: Must be at least 1
+  # ERROR: Missing required 'clients' resources
+
+workload:
+  component: "inference"
+  service: "postgres"  # ERROR: Wrong service for inference component
+  duration: "10minutes"  # ERROR: Invalid duration format
+  # ERROR: Missing required 'model' for inference
+  # ERROR: Missing required 'prompt_len' for inference
+
+# ERROR: Missing required 'artifacts' section

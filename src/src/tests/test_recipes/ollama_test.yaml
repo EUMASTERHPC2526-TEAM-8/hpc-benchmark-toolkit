@@ -1,0 +1,45 @@
+# Test recipe for Ollama service
+scenario: "test-ollama"
+partition: "gpu"
+account: "test-account"
+
+orchestration:
+  mode: "slurm"
+  total_nodes: 8
+  node_allocation:
+    servers:
+      nodes: 3
+    clients:
+      nodes: 4
+      clients_per_node: 10
+    monitors:
+      nodes: 1
+
+resources:
+  servers:
+    gpus: 1
+    cpus_per_task: 8
+    mem_gb: 32
+  clients:
+    gpus: 0
+    cpus_per_task: 4
+    mem_gb: 16
+
+workload:
+  component: "inference"
+  service: "ollama"
+  duration: "10m"
+  warmup: "1m"
+  model: "llama2:7b"
+  prompt_len: 512
+  gen_tokens: 128
+  target_rps: 400
+
+artifacts:
+  container: "/path/to/container.sif"
+
+monitoring:
+  enabled: true
+
+logging:
+  enabled: true

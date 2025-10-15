@@ -1,0 +1,36 @@
+# Recipe with both errors and warnings
+scenario: "test-mixed"
+partition: "gpu"
+# ERROR: Missing 'account'
+
+orchestration:
+  mode: "slurm"
+  total_nodes: 100  # WARNING: Very large
+  node_allocation:
+    servers:
+      nodes: 10
+    clients:
+      nodes: 88
+      clients_per_node: 150  # WARNING: Very high clients per node
+    monitors:
+      nodes: 2  # ERROR: Must be exactly 1 monitor node
+
+resources:
+  servers:
+    gpus: 1
+    cpus_per_task: -5  # ERROR: Negative CPU count
+    mem_gb: 32
+  clients:
+    gpus: 4  # WARNING: Clients with GPUs
+    cpus_per_task: 4
+    mem_gb: 16
+
+workload:
+  component: "inference"
+  service: "vllm"
+  duration: "invalid"  # ERROR: Invalid duration format
+  model: "test-model"
+  prompt_len: 512
+
+artifacts:
+  container: "/path/to/container.sif"

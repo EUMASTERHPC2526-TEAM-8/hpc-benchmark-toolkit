@@ -1,0 +1,38 @@
+# Recipe with multiple warnings but no errors
+scenario: "test-warnings"
+partition: "gpu"
+account: "test-account"
+
+orchestration:
+  mode: "slurm"
+  total_nodes: 150  # WARNING: Very large node count
+  node_allocation:
+    servers:
+      nodes: 10
+    clients:
+      nodes: 139  # WARNING: Very high client-to-server ratio (139:10)
+      clients_per_node: 1  # WARNING: Only 1 client per node
+    monitors:
+      nodes: 1
+
+resources:
+  servers:
+    gpus: 12  # WARNING: Unusually high GPU count
+    cpus_per_task: 150  # WARNING: Very high CPU count
+    mem_gb: 600  # WARNING: Very high memory
+  clients:
+    gpus: 2  # WARNING: Clients typically don't need GPUs
+    cpus_per_task: 4
+    mem_gb: 16
+
+workload:
+  component: "inference"
+  service: "vllm"
+  duration: "30s"  # WARNING: Very short duration
+  warmup: "5s"  # WARNING: Very short warmup
+  model: "test-model"
+  prompt_len: 512
+  target_rps: 15000  # WARNING: Very high RPS
+
+artifacts:
+  container: "/path/to/container.sif"
