@@ -68,8 +68,8 @@ def generate_sbatch(recipe, output_path):
             "use_gpu": False
         },
         "vllm": {
-            "port": 8000,
-            "launch_cmd": "python -m vllm.entrypoints.api_server --host 0.0.0.0 --port 8000",
+            "port": 8080,
+            "launch_cmd": f"python3 -m vllm.entrypoints.openai.api_server --host 0.0.0.0 --port 8080 --model {model}",
             "use_gpu": True
         },
         "vectordb": {
@@ -82,7 +82,8 @@ def generate_sbatch(recipe, output_path):
     workload_config = {
         "model": model,
         "duration": duration,
-        "clients_per_node": clients_per_node
+        "clients_per_node": clients_per_node,
+        "service": service_type
     }
     config_path = "config/workload_config.json"
     config_dir = os.path.dirname(config_path)
@@ -100,6 +101,10 @@ def generate_sbatch(recipe, output_path):
     server_port = service_config["port"]
     server_launch_cmd = service_config["launch_cmd"]
     gpu_flag = "--nv" if service_config["use_gpu"] else ""
+
+    # Process bind mounts from recipe
+    binds = recipe.get("binds", [])
+    bind_flags = " ".join([f"--bind {bind}" for bind in binds]) if binds else ""
 
         # Only pull service image if location file does not exist
     check_service_image = f"""
@@ -137,6 +142,9 @@ mkdir -p $OUTPUT_DIR
 mkdir -p {container_dir}
 BENCHMARK_DIR="$(pwd)/benchmark"
 
+# Create bind mount directories if they don't exist
+{"\n".join([f'mkdir -p {bind.split(":")[0]}' for bind in binds]) if binds else "# No bind mounts configured"}
+
 NODES=($(scontrol show hostname $SLURM_NODELIST))
 SERVER_NODE_LIST="${{NODES[@]:0:{server_nodes}}}"
 CLIENT_NODE_LIST="${{NODES[@]:{server_nodes}:{client_nodes}}}"
@@ -158,7 +166,7 @@ echo "Starting {service_type} services on $SERVER_NODE_LIST..."
 # Service-specific command and port are determined by the service type
 for NODE in $SERVER_NODE_LIST; do
     srun --nodes=1 --ntasks=1 --gpus={recipe["resources"]["servers"]["gpus"]} --nodelist=$NODE --cpus-per-task={cpus_server} --output=$OUTPUT_DIR/container_${{NODE}}.log \\
-        bash -c "apptainer exec {gpu_flag} {service_image_path} bash -c '{server_launch_cmd}'" &
+        bash -c "apptainer exec {gpu_flag} {bind_flags} {service_image_path} bash -c '{server_launch_cmd}'" &
     pids+=($!)
 done
 

@@ -19,6 +19,19 @@ ServiceFactory.register_service(
 )
 
 
+# Register vLLM service
+from benchmark.servers.vllm_server_manager import VllmServerManager
+from benchmark.workload.controller import VllmWorkloadController
+from benchmark.workload.executor import VllmWorkloadExecutor
+
+ServiceFactory.register_service(
+    "vllm",
+    VllmServerManager,
+    VllmWorkloadController,
+    VllmWorkloadExecutor
+)
+
+
 # Register Dummy service (template/example)
 from benchmark.servers.dummy_server_manager import DummyServerManager
 from benchmark.workload.controller import DummyWorkloadController

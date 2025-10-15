@@ -1,7 +1,8 @@
 """
-Ollama-specific workload executor implementation.
+vLLM-specific workload executor implementation.
 
-Runs as a Flask server on client nodes and executes Ollama inference workload.
+Runs as a Flask server on client nodes and executes vLLM inference workload
+using the OpenAI-compatible API.
 """
 
 import argparse
@@ -11,23 +12,23 @@ from typing import Dict, Any
 from benchmark.workload.executor import BaseWorkloadExecutor
 
 
-class OllamaWorkloadExecutor(BaseWorkloadExecutor):
+class VllmWorkloadExecutor(BaseWorkloadExecutor):
     """
-    Workload executor for Ollama inference benchmarking.
+    Workload executor for vLLM inference benchmarking.
 
     Runs on client nodes and executes inference requests against
-    Ollama servers, collecting performance metrics.
+    vLLM servers using the OpenAI-compatible API, collecting performance metrics.
     """
 
     def __init__(self, port: int = 5000):
         """
-        Initialize Ollama workload executor.
+        Initialize vLLM workload executor.
 
         Args:
             port: Port to run the Flask server on
         """
         super().__init__(port)
-        print(f"Initialized Ollama workload executor on port {port}")
+        print(f"Initialized vLLM workload executor on port {port}")
         # Import here to ensure datasets is installed first
         self._ensure_datasets_installed()
 
@@ -47,11 +48,11 @@ class OllamaWorkloadExecutor(BaseWorkloadExecutor):
 
     def _run_benchmark(self, workload_config: Dict[str, Any], thread_id: int) -> Dict[str, Any]:
         """
-        Execute Ollama inference benchmark workload for a single thread.
+        Execute vLLM inference benchmark workload for a single thread.
 
         Args:
             workload_config: Configuration containing:
-                - server_endpoints: List of Ollama server URLs
+                - server_endpoints: List of vLLM server URLs
                 - model: Model name
                 - duration: How long to run
                 - Additional parameters (prompts, concurrency, etc.)
@@ -108,10 +109,15 @@ class OllamaWorkloadExecutor(BaseWorkloadExecutor):
             try:
                 request_start = time.time()
 
-                # Send inference request to Ollama
+                # Send inference request to vLLM using OpenAI-compatible API
                 res = requests.post(
-                    f"{endpoint}/api/generate",
-                    json={"model": model, "prompt": prompt, "stream": False},
+                    f"{endpoint}/v1/completions",
+                    json={
+                        "model": model,
+                        "prompt": prompt,
+                        "max_tokens": 100,
+                        "temperature": 0.7
+                    },
                     timeout=120
                 )
 
@@ -182,13 +188,13 @@ class OllamaWorkloadExecutor(BaseWorkloadExecutor):
 
 
 def main():
-    """Entry point for running the Ollama workload executor as a standalone server."""
-    parser = argparse.ArgumentParser(description="Ollama Workload Executor")
+    """Entry point for running the vLLM workload executor as a standalone server."""
+    parser = argparse.ArgumentParser(description="vLLM Workload Executor")
     parser.add_argument("--port", type=int, default=5000,
                        help="Port to run the workload executor server on")
     args = parser.parse_args()
 
-    executor = OllamaWorkloadExecutor(port=args.port)
+    executor = VllmWorkloadExecutor(port=args.port)
     executor.run()
 
 

@@ -1,7 +1,7 @@
-# Ollama server recipe for MeluXina
+# vllm server recipe for MeluXina
 # Recommended paths for MeluXina HPC cluster
 
-scenario: "ollama-meluxina-test"
+scenario: "vllm-meluxina-test"
 partition: "gpu"
 account: "p200776"
 qos: "default"
@@ -26,7 +26,7 @@ orchestration:
 
 resources:
   servers:
-    gpus: 2
+    gpus: 1
     cpus_per_task: 1
     mem_gb: 32
   clients:
@@ -36,34 +36,37 @@ resources:
 
 workload:
   component: "inference"
-  service: "ollama"
+  service: "vllm"
   clients_per_node: 10
   duration: "2m"
   warmup: "1m"
-  model: "llama2"
+  model: "facebook/opt-125m"  # Small model for testing, can use larger models like "meta-llama/Llama-2-7b-hf"
 
 servers:
   health_check:
     enabled: true
     timeout: 300
     interval: 5
-    endpoint: "/api/tags"
+    endpoint: "/health"  # vLLM uses /health endpoint
   service_config:
-    gpu_layers: 0
+    # vLLM-specific configuration
+    # Models are loaded at startup via --model parameter in container start command
+    tensor_parallel_size: 1  # Number of GPUs for tensor parallelism
+    max_model_len: 2048  # Maximum sequence length
 
 artifacts:
   containers_dir: "/project/home/p200776/team8/containers/"
   service:
-    path: "ollama_latest.sif"
-    remote: "docker://ollama/ollama:latest"
+    path: "vllm_0_5_0.sif"
+    remote: "docker://vllm/vllm:0.5.0"  # Official vLLM Docker image with OpenAI-compatible API
   python:
     path: "python_3_12_3_v2.sif"
     remote: "docker://python:3.12.3-slim"
 
 binds:
-  # Ollama stores models here
+  # vLLM stores downloaded models here (HuggingFace cache)
   # Use $PROJECT path for more storage quota
-  - "/project/home/p200776/team8/.ollama:/root/.ollama:rw"
+  - "/project/home/p200776/team8/.cache/huggingface:/root/.cache/huggingface:rw"
 
   # Optional: Scratch space for temporary files
   - "/project/home/p200776/team8/:/scratch:rw"
