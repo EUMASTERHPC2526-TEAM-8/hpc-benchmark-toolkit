@@ -51,6 +51,7 @@ class TailerLogCollector(BaseLogCollector):
         self.jsonl_handle = None
     
     def deploy(self, sources: List[LogSource]) -> bool:
+        """Deploy log collection infrastructure."""
         print(f"Deploying tailer log collector for {len(sources)} sources")
         
         try:
@@ -76,6 +77,7 @@ class TailerLogCollector(BaseLogCollector):
             return False
     
     def start_collection(self) -> bool:
+        """Start collecting logs from all sources."""
         print("Starting log collection...")
         
         try:
@@ -108,6 +110,7 @@ class TailerLogCollector(BaseLogCollector):
             return False
     
     def _get_log_file_for_source(self, source: LogSource) -> Path:
+        """Determine the log file path for a given source."""
         if source.component == "server":
             return self.output_dir / f"container_{source.node}.log"
         elif source.component == "client":
@@ -116,6 +119,7 @@ class TailerLogCollector(BaseLogCollector):
             raise ValueError(f"Unknown component type: {source.component}")
     
     def _tail_log_file(self, source: LogSource, log_file: Path):
+        """Tail a log file and write to aggregated outputs."""
         print(f"Starting tail for {log_file}")
         
         # Wait for file to exist
@@ -139,6 +143,7 @@ class TailerLogCollector(BaseLogCollector):
             print(f"Error tailing {log_file}: {e}")
     
     def _process_log_line(self, source: LogSource, line: str):
+        """Process a single log line from a source."""
         try:
             timestamp = datetime.utcnow().isoformat() + 'Z'
             
@@ -160,10 +165,12 @@ class TailerLogCollector(BaseLogCollector):
             print(f"Error processing log line: {e}")
     
     def is_ready(self) -> bool:
+        """Check if log collector is ready."""
         ready_file = self.output_dir / "loggers_ready"
         return ready_file.exists()
     
     def stop_collection(self) -> Dict[str, Any]:
+        """Stop log collection and finalize."""
         print("Stopping log collection...")
         
         try:
@@ -201,8 +208,47 @@ class TailerLogCollector(BaseLogCollector):
             return {"error": str(e)}
     
     def _count_lines(self, file_path: Path) -> int:
+        """Count lines in a file."""
         try:
             with open(file_path, 'r') as f:
                 return sum(1 for _ in f)
         except:
             return 0
+    
+    @classmethod
+    def parse_collector_config(cls, recipe_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extract tailer-specific configuration from recipe.
+        
+        Args:
+            recipe_config: Full recipe configuration
+            
+        Returns:
+            Dict containing tailer configuration
+            
+        Raises:
+            ValueError: If required configuration is missing
+        """
+        logging_config = recipe_config.get("logging", {})
+        
+        if not logging_config:
+            raise ValueError("Recipe must include 'logging' section")
+        
+        # Validate collector type
+        collector_type = logging_config.get("type", "tailer")
+        if collector_type != "tailer":
+            raise ValueError(f"Invalid collector type for TailerLogCollector: {collector_type}")
+        
+        # Build config with defaults
+        config = {
+            "type": "tailer",
+            "create_jsonl": logging_config.get("create_jsonl", True),
+            "flush_interval": logging_config.get("flush_interval", 5),
+            "outputs": logging_config.get("outputs", {
+                "stdout": "stdout.log",
+                "stderr": "stderr.log",
+                "aggregated": "aggregated.jsonl"
+            })
+        }
+        
+        return config
