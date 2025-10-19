@@ -1,0 +1,16 @@
+{"timestamp": "2025-10-19T19:36:53.866842Z", "node": "node123", "component": "server", "message": "Server starting on port 11434"}
+{"timestamp": "2025-10-19T19:36:53.866962Z", "node": "node123", "component": "server", "message": "Model loaded successfully"}
+{"timestamp": "2025-10-19T19:36:53.867486Z", "node": "node456", "component": "client", "message": "Client connecting to server"}
+{"timestamp": "2025-10-19T19:36:53.867569Z", "node": "node456", "component": "client", "message": "Sending first request"}
+{"timestamp": "2025-10-19T19:36:54.869434Z", "node": "node123", "component": "server", "message": "Processing request from client"}
+{"timestamp": "2025-10-19T19:36:54.869488Z", "node": "node456", "component": "client", "message": "Received response from server"}
+{"timestamp": "2025-10-19T19:36:54.876438Z", "node": "node456", "component": "client", "message": "Latency: 250ms"}
+{"timestamp": "2025-10-19T19:36:55.879479Z", "node": "node123", "component": "server", "message": "Processing request from client"}
+{"timestamp": "2025-10-19T19:36:55.879721Z", "node": "node456", "component": "client", "message": "Received response from server"}
+{"timestamp": "2025-10-19T19:36:55.879772Z", "node": "node456", "component": "client", "message": "Latency: 250ms"}
+{"timestamp": "2025-10-19T19:36:56.883142Z", "node": "node456", "component": "client", "message": "Received response from server"}
+{"timestamp": "2025-10-19T19:36:56.883318Z", "node": "node456", "component": "client", "message": "Latency: 250ms"}
+{"timestamp": "2025-10-19T19:36:56.883414Z", "node": "node123", "component": "server", "message": "Processing request from client"}
+{"timestamp": "2025-10-19T19:36:57.887031Z", "node": "node456", "component": "client", "message": "Received response from server"}
+{"timestamp": "2025-10-19T19:36:57.887145Z", "node": "node123", "component": "server", "message": "Processing request from client"}
+{"timestamp": "2025-10-19T19:36:57.887295Z", "node": "node456", "component": "client", "message": "Latency: 250ms"}

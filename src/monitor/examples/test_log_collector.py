@@ -4,7 +4,6 @@ Standalone test for the Logging module.
 This demonstrates the logging module functionality without requiring
 integration into the full benchmark framework.
 """
-
 import sys
 import time
 from pathlib import Path
