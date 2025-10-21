@@ -1,0 +1,7 @@
+psutil>=5.9.0
+
+# Notes:
+# - MeLuXina supercomputer requires psutil>=5.9.0
+# - For GPU monitoring: NVIDIA GPU with nvidia-smi tool required
+# - Testing: test_monitor.py uses mocks to simulate GPU metrics without physical GPUs
+# - On systems without NVIDIA GPUs (e.g., Mac), monitor can still easily track CPU/RAM metrics
