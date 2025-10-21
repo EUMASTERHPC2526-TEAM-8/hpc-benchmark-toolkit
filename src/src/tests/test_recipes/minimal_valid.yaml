@@ -1,0 +1,36 @@
+# Minimal valid recipe with only required fields
+scenario: "test-minimal"
+partition: "gpu"
+account: "test-account"
+
+orchestration:
+  mode: "slurm"
+  total_nodes: 6
+  node_allocation:
+    servers:
+      nodes: 2
+    clients:
+      nodes: 3
+      clients_per_node: 5  # WARNING: May be too few for good load
+    monitors:
+      nodes: 1
+
+resources:
+  servers:
+    gpus: 1
+    cpus_per_task: 4
+    mem_gb: 16
+  clients:
+    gpus: 0
+    cpus_per_task: 2
+    mem_gb: 8
+
+workload:
+  component: "inference"
+  service: "vllm"
+  duration: "5m"
+  model: "small-model"
+  prompt_len: 256
+
+artifacts:
+  container: "/container.sif"

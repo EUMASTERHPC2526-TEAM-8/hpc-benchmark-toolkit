@@ -19,12 +19,6 @@ properties:
     type: string
     description: Optional Slurm QoS setting
   
-  # NEW: HPC modules configuration
-  modules:
-    type: array
-    items: { type: string }
-    description: List of HPC modules to load (e.g., ["python/3.9", "apptainer/1.2.0"])
-  
   repetitions:
     type: integer
     minimum: 1
@@ -39,6 +33,11 @@ properties:
         type: string
         enum: [slurm, kubernetes]
         description: Orchestration backend
+      
+      total_nodes:
+        type: integer
+        minimum: 2
+        description: Total nodes for entire experiment (servers + clients + monitor)
       
       node_allocation:
         type: object
@@ -355,24 +354,3 @@ properties:
       output_directory:
         type: string
         default: "/experiments/{experiment_id}"
-  
-  metadata:
-    type: object
-    description: Optional reproducibility info
-    properties:
-      seed: 
-        type: integer
-        description: Random seed
-      
-      git_commit: 
-        type: string
-        description: Git commit hash
-      
-      notes: 
-        type: string
-        description: Free-form notes
-      
-      tags:
-        type: array
-        items: { type: string }
-        description: Searchable tags for experiment categorization

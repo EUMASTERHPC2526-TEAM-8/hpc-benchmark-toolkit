@@ -1,0 +1,69 @@
+# Ollama server recipe for MeluXina
+# Recommended paths for MeluXina HPC cluster
+
+scenario: "ollama-meluxina-test"
+partition: "gpu"
+account: "p200776"
+qos: "default"
+
+# HPC modules to load
+modules:
+  - "Apptainer"
+
+orchestration:
+  mode: "slurm"
+  total_nodes: 2
+  node_allocation:
+    servers:
+      nodes: 1
+    clients:
+      nodes: 1
+    monitors:
+      nodes: 1
+  job_config:
+    time_limit: "02:00:00"
+    exclusive: true
+
+resources:
+  servers:
+    gpus: 2
+    cpus_per_task: 1
+    mem_gb: 32
+  clients:
+    gpus: 1
+    cpus_per_task: 2
+    mem_gb: 16
+
+workload:
+  component: "inference"
+  service: "ollama"
+  clients_per_node: 10
+  duration: "2m"
+  warmup: "1m"
+  model: "llama2"
+
+servers:
+  health_check:
+    enabled: true
+    timeout: 300
+    interval: 5
+    endpoint: "/api/tags"
+  service_config:
+    gpu_layers: 0
+
+artifacts:
+  containers_dir: "/project/home/p200776/team8/containers/"
+  service:
+    path: "ollama_latest.sif"
+    remote: "docker://ollama/ollama:latest"
+  python:
+    path: "python_3_12_3_v2.sif"
+    remote: "docker://python:3.12.3-slim"
+
+binds:
+  # Ollama stores models here
+  # Use $PROJECT path for more storage quota
+  - "/project/home/p200776/team8/.ollama:/root/.ollama:rw"
+
+  # Optional: Scratch space for temporary files
+  - "/project/home/p200776/team8/:/scratch:rw"
