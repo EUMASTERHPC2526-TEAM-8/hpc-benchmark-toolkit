@@ -15,12 +15,12 @@ import benchmark.service_registry
 
 def main():
     parser = argparse.ArgumentParser(description="Benchmark Orchestrator")
-    parser.add_argument("--server-nodes", type=str, required=True,
-                       help="Space-separated list of server node hostnames")
+    parser.add_argument("--server-nodes", type=str, nargs='+', required=True,
+                       help="List of server node hostnames")
     parser.add_argument("--server-port", type=int, default=11434,
                        help="Port for server nodes (default: 11434)")
-    parser.add_argument("--client-nodes", type=str, required=True,
-                       help="Space-separated list of client node hostnames")
+    parser.add_argument("--client-nodes", type=str, nargs='+', required=True,
+                       help="List of client node hostnames")
     parser.add_argument("--client-port", type=int, default=5000,
                        help="Port for client servers (default: 5000)")
     parser.add_argument("--timeout", type=int, default=600,
@@ -32,9 +32,9 @@ def main():
     with open(args.workload_config_file) as f:
         workload_config_input = json.load(f)
 
-    server_nodes = args.server_nodes.split()
+    server_nodes = args.server_nodes
     server_port = args.server_port
-    client_nodes = args.client_nodes.split()
+    client_nodes = args.client_nodes
     client_port = args.client_port
 
     service = workload_config_input.get("service", "ollama")
