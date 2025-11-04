@@ -22,8 +22,7 @@ monitor = Monitor(
     log_console=True,          # Print metrics to console
     export_json=True,          # Also export to JSON
     metrics=("gpu", "cpu", "ram"), # Metrics to monitor
-    max_duration=60,           # Maximum duration in seconds
-    error_log_file="monitor_errors.log"
+    max_duration=60            # Maximum duration in seconds
 )
 monitor.run()
 ```
@@ -42,12 +41,50 @@ python monitor.py
 ## Requirements
 - Python 3.x
 - `psutil>=5.9.0`
+- `prometheus_client>=0.17.0` (required)
 - NVIDIA GPU and `nvidia-smi` (for GPU metrics, optional)
 
 ## Installation
 ```bash
 pip install -r requirements.txt
 ```
+
+## Prometheus Integration
+Prometheus metrics are always collected internally. You can expose them via an HTTP exporter and/or push them to a Pushgateway (utile per job batch brevi con SLURM).
+
+### Enable Exporter (pull model)
+In code:
+
+```python
+monitor = Monitor(
+        # ... other params ...
+        prometheus_port=9100,
+        prometheus_addr="0.0.0.0",
+        prometheus_start_http_server=True,
+)
+```
+
+Prometheus scrape config example:
+
+```yaml
+scrape_configs:
+    - job_name: hpc-monitor
+        static_configs:
+            - targets: ["node-or-ip:9100"]
+```
+
+### Pushgateway (push model)
+In code:
+
+```python
+monitor = Monitor(
+        # ... other params ...
+        prometheus_pushgateway_url="http://pushgateway:9091",
+        prometheus_grouping_labels={"project": "hpc-benchmark"},
+)
+```
+
+The monitor automatically pushes metrics every 15 seconds by default. Grouping labels will include host `instance` and `SLURM_JOB_ID` if present.
 
 ## Testing
 The module includes comprehensive unit tests in `test_monitor.py`:
@@ -68,6 +105,8 @@ python3 -m unittest test_monitor.py
 ### Test Status
 ✅ **All 6 tests passed successfully** (tested on macOS)
 - Ran 6 tests in 1.253s - OK
+  
+Note: Prometheus integration is covered indirectly
 
 ## Platform Support
 - **Linux**: Full support (CPU, RAM, GPU)
@@ -76,5 +115,5 @@ python3 -m unittest test_monitor.py
 - **MeLuXina Supercomputer**: Fully compatible (to be tested still)
 
 ## Extending
-You can add new metrics by extending the class and adding new methods.
+It is possible to add new metrics by extending the class and adding new methods.
 

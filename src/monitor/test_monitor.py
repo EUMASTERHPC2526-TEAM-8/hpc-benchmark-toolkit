@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 from monitor import Monitor
 import os
+import importlib
 
 class TestMonitor(unittest.TestCase): #extension of unittest.TestCase
     """Test suite for Monitor class functionality."""
@@ -23,6 +24,8 @@ class TestMonitor(unittest.TestCase): #extension of unittest.TestCase
             os.remove("test_metrics.json")
         if os.path.exists("test_gpu_metrics.csv"):
             os.remove("test_gpu_metrics.csv")
+        if os.path.exists("test_prom_metrics.csv"):
+            os.remove("test_prom_metrics.csv")
 
     def test_csv_output(self):
         """Test that CSV file is created and contains data."""
@@ -125,6 +128,25 @@ class TestMonitor(unittest.TestCase): #extension of unittest.TestCase
         self.assertIn("75", data_line)    # GPU util for GPU 0
         self.assertIn("50.0", data_line)  # CPU percent
         self.assertIn("4", data_line)     # RAM in MB
+
+    def test_prometheus_metrics_update(self):
+        """Prometheus metrics can be updated without starting HTTP server."""
+        prom_mod = importlib.import_module("prometheus_client")
+
+        monitor = Monitor(
+            output_file="test_prom_metrics.csv",
+            interval=0.1,
+            log_console=False,
+            export_json=False,
+            metrics=("cpu", "ram"),
+            max_duration=0.2,
+            prometheus_start_http_server=False,  # don't bind ports in tests
+        )
+        monitor.run()
+
+        # Ensure registry contains our sample counter metric text
+        content = prom_mod.generate_latest(monitor.registry).decode("utf-8")
+        self.assertIn("monitor_samples_total", content)
 
 if __name__ == "__main__":
     unittest.main()
