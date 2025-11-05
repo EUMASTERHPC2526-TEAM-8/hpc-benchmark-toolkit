@@ -1,0 +1,6 @@
+psutil>=5.9.0
+prometheus_client>=0.17.0
+
+# Notes:
+# - For GPU monitoring: NVIDIA GPU with nvidia-smi tool required
+# - Tests: test_monitor.py uses mocks to simulate GPU metrics without physical GPUs

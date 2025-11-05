@@ -25,3 +25,7 @@ env/
 # Editor temp files (optional)
 *.swp
 *.swo
+
+# Ignore monitor tool generated files
+metrics.csv
+metrics.json
