@@ -112,8 +112,35 @@ Note: Prometheus integration is covered indirectly
 - **Linux**: Full support (CPU, RAM, GPU)
 - **macOS**: CPU and RAM only (no NVIDIA GPUs)
 - **Windows**: Full support if NVIDIA drivers installed
-- **MeLuXina Supercomputer**: Fully compatible (to be tested still)
+- **MeLuXina Supercomputer**: Fully compatible; supports CPU, RAM, Disk, GPU, Network I/O, Process Count, and Uptime metrics.
 
-## Extending
-It is possible to add new metrics by extending the class and adding new methods.
+#📊 Collected Metrics
+Category	Metric Name	Description
+CPU	cpu_usage_percent	CPU utilization percentage
+Memory	ram_used_megabytes	RAM usage in megabytes
+Disk	disk_usage_percent	Disk usage percentage (root filesystem)
+Network I/O	net_bytes_sent_per_second	Bytes sent per second across all network interfaces
+net_bytes_recv_per_second	Bytes received per second across all network interfaces
+Disk I/O	disk_read_bytes_per_second	Disk read throughput (bytes per second)
+disk_write_bytes_per_second	Disk write throughput (bytes per second)
+Processes	process_count	Number of currently running processes
+Uptime	system_uptime_seconds	Total system uptime in seconds
+GPU (if available)	gpu_utilization_percent	GPU utilization percentage
+gpu_memory_used_megabytes	GPU memory usage in megabytes
+#💾 Data Storage
+All collected metrics are stored automatically in two formats inside the output directory (default: ./monitor_output/):
+File	Format	Description
+metrics.jsonl	JSON Lines	Each line is a JSON record containing a timestamp and all metric values. Ideal for programmatic analysis with Python or Pandas.
+metrics.csv	CSV	A comma-separated version of the same data for quick inspection or spreadsheet analysis.
+The exporter also serves metrics in real time for Prometheus scraping on the configured endpoint.
+#🔧 Extending
+You can add new metrics by extending the monitor script:
+Define a new Prometheus metric using Gauge, Counter, or Summary.
+Collect the corresponding data in the sample_metrics() function.
+Append the metric to both the JSON/CSV export and the Prometheus update logic.
+Example ideas for future metrics:
+CPU temperature or fan speed
+GPU power draw
+Network latency or dropped packets
+Custom benchmark-specific performance counters
 
