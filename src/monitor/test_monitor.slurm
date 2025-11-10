@@ -30,7 +30,7 @@ echo "Metrics will be saved in: $MONITOR_OUTPUT_DIR"
 # ----------------------------
 # Run the monitor
 # ----------------------------
-python test_monitor.py \
+python test_extra_monitor.py \
     --log_console=True \
     --export_json=True \
     --export_csv=True \
