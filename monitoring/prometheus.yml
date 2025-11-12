@@ -1,0 +1,70 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'meluxina'
+    project: 'hpc-benchmark'
+
+# Alerting configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: []
+
+# Rule files (optional)
+# rule_files:
+#   - "alerts/*.yml"
+
+scrape_configs:
+  # Scrape Pushgateway on MeluXina
+  - job_name: 'pushgateway'
+    honor_labels: true
+    honor_timestamps: true
+    static_configs:
+      # IMPORTANT: Replace with actual MeluXina Pushgateway address
+      # Option 1: Direct access (if accessible from outside)
+      # - targets: ['meluxina-login-node.lxp.lu:9091']
+      
+      # Option 2: Docker Compose network (recommended when running local stack)
+      - targets: ['pushgateway:9091']  # Service name within the compose network
+      # Option 3: SSH tunnel from host
+      # - targets: ['host.docker.internal:9091']  # Works with Docker Desktop
+      # - targets: ['localhost:9091']  # Works with --network=host
+    
+    # Increase timeout for HPC environments
+    scrape_timeout: 10s
+    
+    # Relabel to add custom labels
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'pushgateway_.*'
+        action: drop
+
+  # Optional: Direct scrape from compute nodes (only if network-accessible)
+  # Usually not possible in HPC due to firewall
+  # - job_name: 'hpc-nodes-direct'
+  #   static_configs:
+  #     - targets:
+  #       - 'mel0001:9100'
+  #       - 'mel0002:9100'
+  #       - 'mel0003:9100'
+  #   scrape_timeout: 10s
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Optional: Grafana monitoring
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+
+# Storage configuration
+# Adjust based on available disk space
+# storage:
+#   tsdb:
+#     path: /prometheus
+#     retention:
+#       time: 30d
+#       size: 50GB

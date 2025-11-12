@@ -236,8 +236,11 @@ class Monitor:
                 registry=self.registry,
             )
             self._last_prom_push = now
-        except Exception:
-            pass
+            if self.log_console:
+                print(f"✅ Pushed metrics to {self.prometheus_pushgateway_url}")
+        except Exception as e:
+            if self.log_console:
+                print(f"❌ Failed to push to Pushgateway: {e}")
 
     def _write_json(self, data, first):
         json_file = self.output_file.replace(".csv", ".json")
@@ -311,7 +314,12 @@ if __name__ == "__main__":
         prometheus_port=9100,
         prometheus_addr="0.0.0.0",
         # Pushgateway example: uncomment and set your URL
-        prometheus_pushgateway_url="http://pushgateway:9091", #This URL should point to your actual Pushgateway instance, if locally use localhost
+        # ATTENZIONE: se esegui questo script dal tuo host (non dentro Docker), "pushgateway" NON si risolve.
+        # Usa ad esempio:
+        #   - http://localhost:9093  (Pushgateway del docker-compose locale)
+        #   - http://localhost:9091  (SSH tunnel verso MeluXina)
+        #   - http://<nome-nodo>:9091 (direttamente sul nodo HPC)
+        prometheus_pushgateway_url=os.getenv("PUSHGATEWAY_URL", "http://localhost:9093"),
         prometheus_grouping_labels={"project": "hpc-benchmark"},
     )
     monitor.run()

@@ -1,0 +1,220 @@
+{
+  "title": "HPC Benchmark Monitor",
+  "tags": ["hpc", "benchmark", "meluxina"],
+  "timezone": "browser",
+  "schemaVersion": 27,
+  "version": 1,
+  "refresh": "5s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "type": "graph",
+      "title": "CPU Usage by Node",
+      "targets": [
+        {
+          "expr": "cpu_usage_percent",
+          "legendFormat": "{{instance}} - {{slurm_job_id}}",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {"format": "percent", "label": "CPU %", "min": 0, "max": 100},
+        {"format": "short"}
+      ],
+      "lines": true,
+      "fill": 1,
+      "linewidth": 2,
+      "pointradius": 2,
+      "legend": {"show": true, "alignAsTable": true, "rightSide": false}
+    },
+    {
+      "id": 2,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "type": "graph",
+      "title": "RAM Usage by Node",
+      "targets": [
+        {
+          "expr": "ram_used_megabytes / 1024",
+          "legendFormat": "{{instance}} - {{slurm_job_id}}",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {"format": "decgbytes", "label": "RAM GB", "min": 0},
+        {"format": "short"}
+      ],
+      "lines": true,
+      "fill": 1,
+      "linewidth": 2,
+      "pointradius": 2,
+      "legend": {"show": true, "alignAsTable": true, "rightSide": false}
+    },
+    {
+      "id": 3,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "type": "graph",
+      "title": "GPU Utilization",
+      "targets": [
+        {
+          "expr": "gpu_utilization_percent",
+          "legendFormat": "GPU {{gpu_id}} - {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {"format": "percent", "label": "GPU %", "min": 0, "max": 100},
+        {"format": "short"}
+      ],
+      "lines": true,
+      "fill": 1,
+      "linewidth": 2,
+      "pointradius": 2,
+      "legend": {"show": true, "alignAsTable": true, "rightSide": false}
+    },
+    {
+      "id": 4,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "type": "graph",
+      "title": "GPU Memory Usage",
+      "targets": [
+        {
+          "expr": "gpu_memory_used_megabytes / 1024",
+          "legendFormat": "GPU {{gpu_id}} - {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {"format": "decgbytes", "label": "GPU Memory GB", "min": 0},
+        {"format": "short"}
+      ],
+      "lines": true,
+      "fill": 1,
+      "linewidth": 2,
+      "pointradius": 2,
+      "legend": {"show": true, "alignAsTable": true, "rightSide": false}
+    },
+    {
+      "id": 5,
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 16},
+      "type": "stat",
+      "title": "Active Nodes",
+      "targets": [
+        {
+          "expr": "count(count by (instance) (cpu_usage_percent))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 16},
+      "type": "stat",
+      "title": "Active GPUs",
+      "targets": [
+        {
+          "expr": "count(gpu_utilization_percent)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 16},
+      "type": "stat",
+      "title": "Avg CPU Usage",
+      "targets": [
+        {
+          "expr": "avg(cpu_usage_percent)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      }
+    },
+    {
+      "id": 8,
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 16},
+      "type": "stat",
+      "title": "Avg GPU Utilization",
+      "targets": [
+        {
+          "expr": "avg(gpu_utilization_percent)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      }
+    },
+    {
+      "id": 9,
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 20},
+      "type": "table",
+      "title": "Node Details",
+      "targets": [
+        {
+          "expr": "cpu_usage_percent",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "instance": "Node",
+              "slurm_job_id": "SLURM Job",
+              "Value": "CPU %"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
