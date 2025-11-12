@@ -1,106 +1,102 @@
-# 🎯 SETUP RAPIDO: Da Zero a Grafana in 15 Minuti
+# Quickstart: from zero to Grafana in ~15 minutes
 
-Questa guida ti porta dall'installazione iniziale alla visualizzazione delle metriche in Grafana nel modo più rapido possibile.
+This is how I set up the full monitoring pipeline end to end: MeluXina node → Pushgateway → SSH tunnel → Prometheus → Grafana.
 
-## ✅ Prerequisiti
+## Prerequisites
 
-- Docker installato localmente
-- Accesso SSH a MeluXina
-- Python 3.x con psutil e prometheus_client installati
+- Docker on my laptop
+- SSH access to MeluXina (key + username)
+- Python 3.x (I use a venv) with psutil and prometheus_client
 
-## 🚀 Parte 1: Setup MeluXina (5 minuti)
-Copy all the data inside meluxina (without github)
+---
+
+## Part 1 — Copy the code to MeluXina (5 min)
+
+On my laptop, from the repo directory:
+
 ```bash
-# Dal tuo Mac, dalla directory del repo:
 cd ~/Documents/Università/CorsiDaSuperare/SoftwareAtelierChallenge
 
 rsync -av --progress -e "ssh -p 8822 -i ~/.ssh/id_ed25519_mlux" \
---exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --exclude='test_metrics.csv' \
-hpc-benchmark-toolkit \
-u103217@login.lxp.lu:/home/users/u103217/
+  --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --exclude='test_metrics.csv' \
+  hpc-benchmark-toolkit \
+  u103217@login.lxp.lu:/home/users/u103217/
 ```
 
-### 1. Accedi a MeluXina
+SSH to MeluXina and go to the repo:
+
 ```bash
 ssh -p 8822 -i ~/.ssh/id_ed25519_mlux u103217@login.lxp.lu
 cd ~/hpc-benchmark-toolkit
 ```
 
-### 2. Setup Pushgateway
+---
+
+## Part 2 — Start Pushgateway on MeluXina (job on the cluster)
+
+I run Pushgateway as a Slurm job so it survives my terminal sessions.
+
 ```bash
 cd monitoring/meluxina
+mkdir -p logs    # Slurm logs
 
-# Rendi eseguibili gli script
-chmod +x *.sh
+# Submit the Pushgateway job (partition/account may need adjusting)
+sbatch start_pushgateway.sh
 
-#lancia un job con salloc e poi apptainer module load
-salloc -q default -p gpu --time=15 -A p200981
-
-# Esegui setup automatico
-./setup_meluxina.sh
-
-# Output ti darà il JOB_ID, salvalo!
+# Check it's running and note the node name (NODES column)
+squeue -u "$USER" -n pushgateway
 ```
 
-### 3. Ottieni URL Pushgateway
+Once the job is RUNNING, Pushgateway will listen on http://<compute-node>:9091 on that node.
+
+---
+
+## Part 3 — Start the local stack (Prometheus + Grafana + local Pushgateway)
+
+On my laptop:
+
 ```bash
-# Aspetta qualche secondo che il job parta
-sleep 10
-
-# Trova il nodo
-./test_pushgateway.sh
-
-# Output sarà tipo: "http://mel0042:9091"
-# SALVA QUESTO URL!
-```
-
-## 🖥️ Parte 2: Setup Locale (3 minuti)
-
-### 1. Avvia Stack Docker
-```bash
-# Sul tuo computer locale
 cd monitoring
 chmod +x start.sh stop.sh
 ./start.sh
-
-# Aspetta che tutto sia pronto
 ```
 
-### 2. Apri SSH Tunnel (porta locale 19091)
-```bash
-# In un altro terminale (sostituisci mel0042 con il tuo nodo reale)
-# Variante semplice (login risolve il compute node):
-ssh -p 8822 -i ~/.ssh/id_ed25519_mlux -N -L 19091:$NODE$:9091 u103217@login.lxp.lu
+Ports I use locally:
+- Prometheus: http://localhost:9092
+- Grafana: http://localhost:3001
+- Local Pushgateway (for local tests only): http://localhost:9093
 
-# LASCIA QUESTO TERMINALE APERTO!
+---
+
+## Part 4 — Open the SSH tunnel from laptop → MeluXina
+
+I forward a local port to the compute node where Pushgateway is running:
+
+```bash
+# Replace <node> with the value from squeue (e.g., mel2133)
+ssh -p 8822 -i ~/.ssh/id_ed25519_mlux -N -L 19091:<node>:9091 u103217@login.lxp.lu
 ```
 
-## 🧪 Parte 3: Test Locale (2 minuti)
+Keep this terminal open. Prometheus will scrape the tunneled target at http://localhost:19091.
+
+---
+
+## Part 5 — Quick local sanity check (optional, 2 min)
+
+I like to verify the local pipeline before using MeluXina metrics:
 
 ```bash
-# Sul tuo computer
 cd src/monitor
-
-# Avvia monitor di test
 python3 run_local_monitor.py
-
-# Dovresti vedere metriche ogni secondo
-# Il monitor pusha automaticamente a http://localhost:9093 (Pushgateway del docker-compose)
 ```
 
-## 📊 Parte 4: Visualizza in Grafana (2 minuti)
+This pushes to the local Pushgateway on port 9093 (from docker-compose). I should see data in Grafana.
 
-1. Apri browser: **http://localhost:3001**
-2. Login: **admin** / **admin**
-3. Vai su Dashboards → "HPC Benchmark Monitor"
-4. Dovresti vedere grafici con metriche del tuo computer!
+---
 
-Se vedi i grafici → **SUCCESSO! 🎉**
+## Part 6 — Run the Monitor on a MeluXina compute node (3–5 min)
 
-## 🏔️ Parte 5: Test su MeluXina (3 minuti)
-
-### 1. Esegui il monitor sul nodo (senza Apptainer)
-Alloca un nodo ed esegui Python con un venv minimale.
+Allocate a node and set up a small venv:
 
 ```bash
 salloc -A <account> -p <partition> -N 1 -t 00:10:00
@@ -109,23 +105,17 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install psutil prometheus_client requests
+```
 
-# Avvia il Pushgateway sul nodo (se non già attivo)
-# Assicurati che ci sia un pushgateway in ascolto su :9091
+Verify Pushgateway is reachable on the node (it must be listening on localhost:9091 if you started it on the same node):
+
 ```bash
-# Su MeluXina dopo salloc -N1 (esempio: nodo mel2133)
-
-# PRIMA: Avvia Pushgateway in background su questo nodo
-cd ~/hpc-benchmark-toolkit/monitoring/meluxina
-./setup_meluxina.sh &
-sleep 10  # Aspetta che sia pronto
-
-# VERIFICA che Pushgateway funzioni
 curl -s http://localhost:9091/metrics | head -5
-# Dovresti vedere metriche prometheus
+```
 
-# POI: Esegui il monitor per 60s verso localhost:9091
-cd ~/hpc-benchmark-toolkit/src/monitor
+Run the Monitor for 60 seconds and push to that Pushgateway:
+
+```bash
 python3 - <<'PY'
 import sys, os
 sys.path.insert(0, os.path.expanduser('~/hpc-benchmark-toolkit/src'))
@@ -138,172 +128,122 @@ m = Monitor(
     metrics=('gpu','cpu','ram'),
     max_duration=60,
     prometheus_pushgateway_url='http://localhost:9091',
-    prometheus_grouping_labels={'test':'meluxina'},
+    prometheus_grouping_labels={'source':'meluxina'},
 )
 m.run()
 PY
 ```
 
-### 3. Verifica in Grafana
-- Torna su http://localhost:3001
-- Refresh dashboard
-- Dovresti vedere metriche da un nodo MeluXina!
-- Guarda il campo `instance` per vedere l'hostname del nodo
+If Pushgateway is running on a different node, set the full URL instead of localhost (e.g., http://mel0042:9091).
 
-Se vedi metriche da MeluXina → **PIENO SUCCESSO! 🚀**
+---
+From this point onwards, nothing worked
 
-## 🎉 Congratulazioni!
+## Part 7 — See the data in Grafana (2 min)
 
-Hai completato il setup! Ora puoi:
+On my laptop:
+1) Open http://localhost:3001 (Grafana)
+2) Log in with admin / admin
+3) Open the dashboard “HPC Benchmark Monitor”
+4) I should see the time series from my laptop and from the MeluXina node (look at the instance label)
 
-### Usare monitoring nei benchmark
-```bash
-python src/benchmark/orchestrator.py \
-    --server-nodes node1 node2 \
-    --client-nodes node3 \
-    --workload-config-file config.json \
-    --enable-monitoring \
-    --monitor-interval 2 \
-    --monitor-output results/metrics.csv
-```
+Success if data shows up. 🚀
 
-Ma prima devi configurare il Pushgateway URL nell'orchestrator...
+---
 
-### Opzione 1: Hardcode URL (veloce)
-Modifica `src/benchmark/orchestrator.py`:
+## Using the Monitor from the orchestrator
+
+At minimum, I pass the Pushgateway URL to the Monitor configuration.
+
+Option A — Hardcode (quick and dirty):
 
 ```python
-# Trova questa riga
 monitor_config = {
     "output_file": args.monitor_output,
-    # ... altre opzioni ...
+    # ... other options ...
+    "prometheus_pushgateway_url": "http://mel0042:9091",  # replace with your node
 }
-
-# Aggiungi
-monitor_config["prometheus_pushgateway_url"] = "http://mel0042:9091"  # Sostituisci
 ```
 
-### Opzione 2: Auto-detect (elegante)
+Option B — CLI argument (flexible):
+
 ```python
-# All'inizio di orchestrator.py
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'monitoring', 'meluxina'))
-from detect_pushgateway import get_pushgateway_url
-
-# Quando crei il monitor
-pushgateway_url = get_pushgateway_url()
-if pushgateway_url:
-    monitor_config["prometheus_pushgateway_url"] = pushgateway_url
-```
-
-### Opzione 3: Argomento CLI (flessibile)
-```python
-# Aggiungi argomento
-parser.add_argument("--pushgateway-url", type=str,
-                   help="Prometheus Pushgateway URL")
-
-# Usa nell'orchestrator
+parser.add_argument("--pushgateway-url", type=str, help="Prometheus Pushgateway URL")
 if args.pushgateway_url:
     monitor_config["prometheus_pushgateway_url"] = args.pushgateway_url
 ```
 
-Poi esegui:
+Then run:
+
 ```bash
-python orchestrator.py \
-    --pushgateway-url "http://mel0042:9091" \
-    --enable-monitoring \
-    # ... altri args
+python src/benchmark/orchestrator.py \
+  --enable-monitoring \
+  --monitor-interval 2 \
+  --monitor-output results/metrics.csv \
+  --pushgateway-url "http://mel0042:9091"
 ```
 
-## 🔥 Pro Tips
+---
 
-### Mantenere Pushgateway sempre attivo
+## Pro tips
+
+- Keep the Pushgateway job alive:
+  ```bash
+  squeue -u "$USER" -n pushgateway
+  # Restart if needed
+  cd monitoring/meluxina && mkdir -p logs && sbatch start_pushgateway.sh
+  ```
+
+- SSH tunnel convenience (~/.ssh/config):
+  ```
+  Host meluxina-tunnel
+      HostName meluxina.lxp.lu
+      User u103217
+      LocalForward 19091 mel0042:9091
+  ```
+  Then: `ssh -p 8822 -i ~/.ssh/id_ed25519_mlux meluxina-tunnel`
+
+---
+
+## Troubleshooting
+
+No data in Grafana:
 ```bash
-# Su MeluXina - controlla ogni giorno
-squeue -u $USER -n pushgateway
+# 1) Check the tunneled Pushgateway
+curl -s http://localhost:19091/metrics | head -20
 
-# Se non è running, riavvia
-sbatch monitoring/meluxina/start_pushgateway.sh
+# 2) Check Prometheus targets
+curl -s http://localhost:9092/api/v1/targets | jq '.data.activeTargets[] | {labels: .labels, health: .health, lastError: .lastError}'
+
+# 3) Restart the local stack
+cd monitoring && ./stop.sh && ./start.sh
 ```
 
-### SSH Tunnel automatico
-Crea `~/.ssh/config`:
-```
-Host meluxina-tunnel
-    HostName meluxina.lxp.lu
-    User your_username
-    LocalForward 9091 mel0042:9091
-```
-
-Poi:
+SSH tunnel keeps dropping:
 ```bash
-ssh meluxina-tunnel
+brew install autossh   # macOS
+autossh -M 0 -N -L 19091:mel0042:9091 -p 8822 -i ~/.ssh/id_ed25519_mlux u103217@login.lxp.lu
 ```
 
-### Grafana Alerts
-1. In Grafana → Alerting → Alert rules
-2. Create alert rule
-3. Query: `cpu_usage_percent > 90`
-4. Notification channel: email/slack
-
-### Dashboard personalizzato
-1. Duplicate dashboard
-2. Add panel → Add Query
-3. Query: `rate(monitor_samples_total[5m])`
-4. Save
-
-## 🆘 Troubleshooting Rapido
-
-### "No data in Grafana"
+Monitor can’t push:
 ```bash
-# 1. Verifica Pushgateway (tunnel locale)
-curl http://localhost:19091/metrics | grep cpu_usage
+echo "$PUSHGATEWAY_URL"   # verify the URL you are using
 
-# 2. Verifica Prometheus
-curl http://localhost:9092/api/v1/targets
-
-# 3. Restart tutto
-docker compose restart
-```
-
-### "SSH tunnel disconnected"
-```bash
-# Usa autossh per riconnessione automatica
-brew install autossh  # Mac
-apt install autossh   # Linux
-
-autossh -M 0 -L 19091:mel0042:9091 meluxina.lxp.lu
-```
-
-### "Monitor not pushing"
-```bash
-# Verifica URL
-echo $PUSHGATEWAY_URL
-
-# Test manuale
 cat <<EOF | curl --data-binary @- http://mel0042:9091/metrics/job/test
 # TYPE test_metric gauge
 test_metric 42
 EOF
 
-# Verifica
-curl http://mel0042:9091/metrics | grep test_metric
+curl -s http://mel0042:9091/metrics | grep test_metric
 ```
 
-## 📚 Next Steps
+---
 
-- [ ] Configurare alert rules
-- [ ] Creare dashboard personalizzati
-- [ ] Esportare metriche in CSV da Grafana
-- [ ] Integrare con CI/CD pipeline
-- [ ] Setup long-term storage (Thanos)
+## What I expect to work at the end
 
-## ✨ Fatto!
+- Monitor collects CPU/RAM/GPU metrics on MeluXina
+- Pushgateway (on the node) stores the latest metrics
+- Prometheus (local) scrapes via the SSH tunnel
+- Grafana (local) shows everything in near real-time
 
-Hai un sistema di monitoring completo:
-- ✅ Monitor raccoglie metriche HPC
-- ✅ Pushgateway conserva metriche da job SLURM
-- ✅ Prometheus aggrega tutto
-- ✅ Grafana visualizza real-time
-
-**Tempo totale: ~15 minuti** ⚡
+Total time: about 15 minutes.
