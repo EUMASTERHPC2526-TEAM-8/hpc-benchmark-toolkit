@@ -12,16 +12,10 @@ This is how I set up the full monitoring pipeline end to end: MeluXina node → 
 
 ## Part 1 — Copy the code to MeluXina (5 min)
 
-On my laptop, from the repo directory:
+On my laptop, from the repo directory to sync the source code with meluxina data:
 
 ```bash
 cd ~/Documents/Università/CorsiDaSuperare/SoftwareAtelierChallenge
-
-rsync -av --progress -e "ssh -p 8822 -i ~/.ssh/id_ed25519_mlux" \
-  --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --exclude='test_metrics.csv' \
-  hpc-benchmark-toolkit \
-  u103217@login.lxp.lu:/home/users/u103217/
-```
 
 SSH to MeluXina and go to the repo:
 
@@ -30,6 +24,15 @@ ssh -p 8822 -i ~/.ssh/id_ed25519_mlux u103217@login.lxp.lu
 cd ~/hpc-benchmark-toolkit
 ```
 
+On another window then:
+
+```bash
+rsync -av --progress -e "ssh -p 8822 -i ~/.ssh/id_ed25519_mlux" \
+  --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --exclude='test_metrics.csv' \
+  hpc-benchmark-toolkit \
+  u103217@login.lxp.lu:/home/users/u103217/
+```
+##To be done just when data is changed, fter accessing and identifying the port
 ---
 
 ## Part 2 — Start Pushgateway on MeluXina (job on the cluster)
@@ -53,7 +56,7 @@ Once the job is RUNNING, Pushgateway will listen on http://<compute-node>:9091 o
 
 ## Part 3 — Start the local stack (Prometheus + Grafana + local Pushgateway)
 
-On my laptop:
+On my laptop, no meluxina: 
 
 ```bash
 cd monitoring
@@ -73,7 +76,7 @@ Ports I use locally:
 I forward a local port to the compute node where Pushgateway is running:
 
 ```bash
-# Replace <node> with the value from squeue (e.g., mel2133)
+# Replace <node> with the value from squeue NODELIST (e.g., melxxxx)
 ssh -p 8822 -i ~/.ssh/id_ed25519_mlux -N -L 19091:<node>:9091 u103217@login.lxp.lu
 ```
 
@@ -83,7 +86,7 @@ Keep this terminal open. Prometheus will scrape the tunneled target at http://lo
 
 ## Part 5 — Quick local sanity check (optional, 2 min)
 
-I like to verify the local pipeline before using MeluXina metrics:
+I like to verify the local pipeline before using MeluXina metrics: ## No need to do it anymore
 
 ```bash
 cd src/monitor
@@ -99,18 +102,22 @@ This pushes to the local Pushgateway on port 9093 (from docker-compose). I shoul
 Allocate a node and set up a small venv:
 
 ```bash
-salloc -A <account> -p <partition> -N 1 -t 00:10:00
+salloc -A <account> -p <partition> -N 1 --t 15
+## for me: salloc -q default -p gpu --time=15 -A p200981
 
+#Vrtual environment setting
 python3 -m venv .venv
 source .venv/bin/activate
-pip install --upgrade pip
 pip install psutil prometheus_client requests
 ```
 
-Verify Pushgateway is reachable on the node (it must be listening on localhost:9091 if you started it on the same node):
+Get the Pushgateway node hostname and verify it's reachable (do NOT assume localhost unless you allocated the same node):
 
 ```bash
-curl -s http://localhost:9091/metrics | head -5
+PG_NODE=$(squeue -u u103217 -n pushgateway -h -o %N)
+echo "Pushgateway node: $PG_NODE"
+curl -s "http://$PG_NODE:9091/metrics" | head -5
+export PUSHGATEWAY_URL="http://$PG_NODE:9091"
 ```
 
 Run the Monitor for 60 seconds and push to that Pushgateway:
@@ -121,24 +128,23 @@ import sys, os
 sys.path.insert(0, os.path.expanduser('~/hpc-benchmark-toolkit/src'))
 from monitor.monitor import Monitor
 
+push_url = os.environ.get('PUSHGATEWAY_URL', 'http://localhost:9091')
+
 m = Monitor(
     output_file='test_metrics.csv',
     interval=2,
     log_console=True,
     metrics=('gpu','cpu','ram'),
-    max_duration=60,
-    prometheus_pushgateway_url='http://localhost:9091',
+    max_duration=120,
+    prometheus_pushgateway_url=push_url,
     prometheus_grouping_labels={'source':'meluxina'},
 )
+m_print = lambda msg: print(f"[monitor] {msg}")
+m_print(f"Pushing to {push_url}")
 m.run()
 PY
 ```
-
-If Pushgateway is running on a different node, set the full URL instead of localhost (e.g., http://mel0042:9091).
-
 ---
-From this point onwards, nothing worked
-
 ## Part 7 — See the data in Grafana (2 min)
 
 On my laptop:
