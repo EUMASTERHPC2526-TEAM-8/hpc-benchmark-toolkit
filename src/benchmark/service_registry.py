@@ -10,6 +10,9 @@ from benchmark.servers.ollama_server_manager import OllamaServerManager
 from benchmark.workload.controller import OllamaWorkloadController
 from benchmark.workload.executor import OllamaWorkloadExecutor
 
+#import log collector
+from benchmark.logging.tailer_log_collector import TailerLogCollector
+
 # Register Ollama service
 ServiceFactory.register_service(
     "ollama",
@@ -42,3 +45,6 @@ ServiceFactory.register_service(
     DummyWorkloadController,
     DummyWorkloadExecutor
 )
+
+# Register tailer log collector
+ServiceFactory.register_log_collector("tailer", TailerLogCollector)
