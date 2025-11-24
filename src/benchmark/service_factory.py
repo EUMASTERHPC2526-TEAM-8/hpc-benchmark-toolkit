@@ -7,9 +7,11 @@ specified in the recipe configuration.
 """
 
 from typing import Dict, Any, List
+from pathlib import Path 
 from benchmark.servers.base_server_manager import BaseServerManager
 from benchmark.workload.controller import BaseWorkloadController
 from benchmark.workload.executor import BaseWorkloadExecutor
+from benchmark.logging.base_log_collector import BaseLogCollector
 
 
 class ServiceFactory:
@@ -26,6 +28,7 @@ class ServiceFactory:
     _server_managers: Dict[str, type] = {}
     _workload_controllers: Dict[str, type] = {}
     _workload_executors: Dict[str, type] = {}
+    _log_collectors: Dict[str, type] = {}
 
     @classmethod
     def register_service(cls, service_name: str,
@@ -69,6 +72,7 @@ class ServiceFactory:
 
         manager_class = cls._server_managers[service_name]
         return manager_class(config)
+
 
     @classmethod
     def create_workload_controller(cls, service_name: str,
@@ -124,6 +128,32 @@ class ServiceFactory:
 
         executor_class = cls._workload_executors[service_name]
         return executor_class(port)
+    
+    @classmethod
+    def register_log_collector(cls, collector_type: str, collector_class: type):
+        """Register a new log collector implementation."""
+        cls._log_collectors[collector_type] = collector_class
+        print(f"Registered log collector: {collector_type}")
+    
+    @classmethod
+    def create_log_collector(cls, collector_type: str, 
+                            config: Dict[str, Any], 
+                            output_dir) -> BaseLogCollector:
+        """Create a log collector of the specified type."""
+        if collector_type not in cls._log_collectors:
+            raise ValueError(
+                f"Unknown log collector type: {collector_type}. "
+                f"Available types: {list(cls._log_collectors.keys())}"
+            )
+        
+        collector_class = cls._log_collectors[collector_type]
+        return collector_class(config, Path(output_dir))
+    
+    @classmethod
+    def list_log_collectors(cls) -> List[str]:
+        """List all registered log collectors."""
+        return list(cls._log_collectors.keys())
+    
 
     @classmethod
     def list_services(cls) -> List[str]:
