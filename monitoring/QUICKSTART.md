@@ -4,7 +4,7 @@ This is how I set up the full monitoring pipeline end to end: MeluXina node → 
 
 ## Prerequisites
 
-- Docker on my laptop
+- Docker on my laptop needed to verify the correct execution
 - SSH access to MeluXina (key + username)
 - Python 3.x (I use a venv) with psutil and prometheus_client
 
@@ -76,7 +76,7 @@ Ports I use locally:
 I forward a local port to the compute node where Pushgateway is running:
 
 ```bash
-# Replace <node> with the value from squeue NODELIST (e.g., melxxxx)
+# Replace <node> with the value of the pushgateway from squeue NODELIST (e.g., melxxxx)
 ssh -p 8822 -i ~/.ssh/id_ed25519_mlux -N -L 19091:<node>:9091 u103217@login.lxp.lu
 ```
 
@@ -84,31 +84,21 @@ Keep this terminal open. Prometheus will scrape the tunneled target at http://lo
 
 ---
 
-## Part 5 — Quick local sanity check (optional, 2 min)
-
-I like to verify the local pipeline before using MeluXina metrics: ## No need to do it anymore
-
-```bash
-cd src/monitor
-python3 run_local_monitor.py
-```
-
-This pushes to the local Pushgateway on port 9093 (from docker-compose). I should see data in Grafana.
-
----
-
-## Part 6 — Run the Monitor on a MeluXina compute node (3–5 min)
+## Part 5 — Run the Monitor on a MeluXina compute node (3–5 min)
 
 Allocate a node and set up a small venv:
 
 ```bash
 salloc -A <account> -p <partition> -N 1 --t 15
-## for me: salloc -q default -p gpu --time=15 -A p200981
+## for me: salloc -q default -p gpu --time=30 -A p200981
 
-#Vrtual environment setting
+# Virtual environment setup
 python3 -m venv .venv
 source .venv/bin/activate
-pip install psutil prometheus_client requests
+
+# Install all dependencies (Monitor + Orchestrator)
+pip install flask requests psutil prometheus_client pyyaml
+
 ```
 
 Get the Pushgateway node hostname and verify it's reachable (do NOT assume localhost unless you allocated the same node):
@@ -157,90 +147,80 @@ Success if data shows up. 🚀
 
 ---
 
-## Using the Monitor from the orchestrator
+## Part 8 — Using the Monitor from the orchestrator
 
-At minimum, I pass the Pushgateway URL to the Monitor configuration.
+The orchestrator has built-in monitoring support. Use it to collect metrics automatically during your benchmark runs.
 
-Option A — Hardcode (quick and dirty):
+### Find your allocated nodes
 
-```python
-monitor_config = {
-    "output_file": args.monitor_output,
-    # ... other options ...
-    "prometheus_pushgateway_url": "http://mel0042:9091",  # replace with your node
+```bash
+# Check your active jobs
+squeue -u "$USER"
+
+# If you have interactive allocations, get node names
+scontrol show hostname $SLURM_JOB_NODELIST
+```
+
+### Run benchmark with monitoring
+
+```bash
+cd ~/hpc-benchmark-toolkit
+export PYTHONPATH="$PWD/src:$PYTHONPATH"
+
+# Find Pushgateway node
+PG_NODE=$(squeue -u $USER -n pushgateway -h -o %N)
+echo "Pushgateway node: $PG_NODE"
+
+# Create dummy config for testing
+cat > config.json << 'EOF'
+{
+  "service": "dummy",
+  "model": "test-model",
+  "clients_per_node": 1
 }
-```
-
-Option B — CLI argument (flexible):
-
-```python
-parser.add_argument("--pushgateway-url", type=str, help="Prometheus Pushgateway URL")
-if args.pushgateway_url:
-    monitor_config["prometheus_pushgateway_url"] = args.pushgateway_url
-```
-
-Then run:
-
-```bash
-python src/benchmark/orchestrator.py \
-  --enable-monitoring \
-  --monitor-interval 2 \
-  --monitor-output results/metrics.csv \
-  --pushgateway-url "http://mel0042:9091"
-```
-
----
-
-## Pro tips
-
-- Keep the Pushgateway job alive:
-  ```bash
-  squeue -u "$USER" -n pushgateway
-  # Restart if needed
-  cd monitoring/meluxina && mkdir -p logs && sbatch start_pushgateway.sh
-  ```
-
-- SSH tunnel convenience (~/.ssh/config):
-  ```
-  Host meluxina-tunnel
-      HostName meluxina.lxp.lu
-      User u103217
-      LocalForward 19091 mel0042:9091
-  ```
-  Then: `ssh -p 8822 -i ~/.ssh/id_ed25519_mlux meluxina-tunnel`
-
----
-
-## Troubleshooting
-
-No data in Grafana:
-```bash
-# 1) Check the tunneled Pushgateway
-curl -s http://localhost:19091/metrics | head -20
-
-# 2) Check Prometheus targets
-curl -s http://localhost:9092/api/v1/targets | jq '.data.activeTargets[] | {labels: .labels, health: .health, lastError: .lastError}'
-
-# 3) Restart the local stack
-cd monitoring && ./stop.sh && ./start.sh
-```
-
-SSH tunnel keeps dropping:
-```bash
-brew install autossh   # macOS
-autossh -M 0 -N -L 19091:mel0042:9091 -p 8822 -i ~/.ssh/id_ed25519_mlux u103217@login.lxp.lu
-```
-
-Monitor can’t push:
-```bash
-echo "$PUSHGATEWAY_URL"   # verify the URL you are using
-
-cat <<EOF | curl --data-binary @- http://mel0042:9091/metrics/job/test
-# TYPE test_metric gauge
-test_metric 42
 EOF
 
-curl -s http://mel0042:9091/metrics | grep test_metric
+# Get your allocated node
+MYNODE=$(hostname)
+
+# Run orchestrator with monitoring
+python3 src/benchmark/orchestrator.py \
+  --server-nodes $MYNODE \
+  --client-nodes $MYNODE \
+  --workload-config-file config.json \
+  --enable-monitoring \
+  --pushgateway-node $PG_NODE \
+  --monitor-interval 2 \
+  --monitor-output results/metrics.csv
+```
+
+**What happens:**
+- Monitor runs in background thread during the entire benchmark
+- Collects CPU/RAM/GPU metrics every 2 seconds
+- Pushes to Pushgateway → visible in Grafana in real-time
+- Saves local CSV to `results/metrics.csv`
+- Dummy service completes immediately (for testing monitoring only)
+
+**To see CPU oscillations in Grafana:**
+
+Still to undestand how to create worklosd
+
+**Check results:**
+
+```bash
+# View CSV
+cat results/metrics.csv | tail -20
+
+# Verify push to Pushgateway
+curl -s http://$PG_NODE:9091/metrics | grep "cpu_usage_percent.*mel"
+```
+
+**Without monitoring** (original behavior):
+```bash
+python3 src/benchmark/orchestrator.py \
+  --server-nodes mel2100 \
+  --client-nodes mel2105 mel2004 \
+  --workload-config-file config.json
 ```
 
 ---
