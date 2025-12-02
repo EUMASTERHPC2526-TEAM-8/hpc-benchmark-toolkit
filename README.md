@@ -232,24 +232,3 @@ ps aux | grep "ssh.*19091"
 # Verify Prometheus scraping
 curl http://localhost:9092/api/v1/targets | jq '.data.activeTargets[] | select(.labels.job=="hpc-monitor")'
 ```
-
-## Contributing
-
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/my-feature`
-3. Follow existing patterns (ServiceFactory, BaseWorkloadController)
-4. Add tests for new services
-5. Update documentation
-
-## License
-
-[Add license information]
-
-## Authors
-
-Team 8 - Software Atelier HPC Challenge 2025
-
-## Acknowledgments
-
-- MeluXina HPC cluster for testing infrastructure
-- Prometheus/Grafana communities for monitoring tools
