@@ -15,3 +15,9 @@ class DummyWorkloadController(BaseWorkloadController): # Will be renamed to Dumm
     def start_workload(self, workload_config):
         print(f"[Dummy] Starting workload with config: {workload_config}")
         return True
+    
+    def fetch_metrics(self):
+        """Dummy implementation that simulates immediate completion"""
+        print(f"[Dummy] Simulating completed workload")
+        # Return metrics showing all clients as completed (running=False)
+        return {node: {"running": False, "status": "completed"} for node in self.client_nodes}

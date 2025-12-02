@@ -29,3 +29,4 @@ env/
 # Ignore monitor tool generated files
 metrics.csv
 metrics.json
+src/monitor/local_metrics.csv

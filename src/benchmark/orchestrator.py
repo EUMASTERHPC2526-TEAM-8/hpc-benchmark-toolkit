@@ -10,7 +10,10 @@ from pathlib import Path
 from benchmark.service_factory import ServiceFactory
 import time
 import json
+import yaml
 import os
+import sys
+import socket
 import benchmark.service_registry
 from benchmark.logging.base_log_collector import LogSource
 
@@ -28,23 +31,37 @@ def main():
                        help="Timeout in seconds")
     parser.add_argument("--workload-config-file", type=str, required=True,
                        help="Path to the workload configuration file ")
+    parser.add_argument("--enable-monitoring", action="store_true",
+                       help="Enable system monitoring during benchmark")
+    parser.add_argument("--monitor-interval", type=int, default=5,
+                       help="Monitoring sample interval in seconds (default: 5)")
+    parser.add_argument("--monitor-output", type=str, default="benchmark_metrics.csv",
+                       help="Output file for monitoring metrics (default: benchmark_metrics.csv)")
+    parser.add_argument("--pushgateway-node", type=str,
+                       help="Pushgateway node hostname (e.g., mel2145). Required if --enable-monitoring is used.")
     args = parser.parse_args()
     
     OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "./benchmark_output")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     print(f"Output directory: {OUTPUT_DIR}")
 
+    # Load config file (supports both JSON and YAML)
     with open(args.workload_config_file) as f:
-        workload_config_input = json.load(f)
+        if args.workload_config_file.endswith(('.yaml', '.yml')):
+            workload_config_input = yaml.safe_load(f)
+        else:
+            workload_config_input = json.load(f)
 
     server_nodes = args.server_nodes
     server_port = args.server_port
     client_nodes = args.client_nodes
     client_port = args.client_port
 
-    service = workload_config_input.get("service", "ollama")
-    model = workload_config_input.get("model", "")
-    clients_per_node = workload_config_input.get("clients_per_node", 1)
+    # Support both flat and nested config formats
+    workload = workload_config_input.get("workload", workload_config_input)
+    service = workload.get("service", "ollama")
+    model = workload.get("model", "")
+    clients_per_node = workload.get("clients_per_node", 1)
 
     print(f"Orchestrating benchmark for service: {service}")
     print(f"Server nodes: {server_nodes}")
@@ -71,6 +88,62 @@ def main():
         exit(1)
 
     print(f"All {service} endpoints healthy and prepared successfully.")
+
+    # Initialize monitoring if enabled
+    monitor = None
+    if args.enable_monitoring:
+        if not args.pushgateway_node:
+            print("Error: --pushgateway-node is required when --enable-monitoring is used.")
+            print("Find your Pushgateway node with: squeue -u $USER -n pushgateway -h -o %N")
+            exit(1)
+            
+        try:
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+            from monitor.monitor import Monitor
+            
+            pushgateway_node = args.pushgateway_node
+            
+            # Create output directory if it doesn't exist
+            output_dir = os.path.dirname(args.monitor_output)
+            if output_dir and not os.path.exists(output_dir):
+                os.makedirs(output_dir, exist_ok=True)
+            
+            monitor_config = {
+                "output_file": args.monitor_output,
+                "interval": args.monitor_interval,
+                "log_console": True,
+                "export_json": False,
+                "metrics": ("gpu", "cpu", "ram"),
+                "max_duration": None,  # Run until benchmark completes
+                "prometheus_pushgateway_url": f"http://{pushgateway_node}:9091",
+                "prometheus_grouping_labels": {
+                    "job": "benchmark",
+                    "source": "orchestrator",
+                    "instance": socket.gethostname()
+                }
+            }
+            
+            monitor = Monitor(**monitor_config)
+            print(f"\nMonitoring enabled:")
+            print(f"  - Output: {args.monitor_output}")
+            print(f"  - Interval: {args.monitor_interval}s")
+            print(f"  - Pushgateway: http://{pushgateway_node}:9091")
+            print(f"  - Starting monitor in background...")
+            
+            # Start monitor in a separate thread
+            import threading
+            monitor_thread = threading.Thread(target=monitor.run, daemon=True)
+            monitor_thread.start()
+            time.sleep(2)  # Give monitor time to initialize
+            
+        except ImportError as e:
+            print(f"Warning: Could not import Monitor: {e}")
+            print("Continuing without monitoring...")
+            monitor = None
+        except Exception as e:
+            print(f"Warning: Failed to start monitor: {e}")
+            print("Continuing without monitoring...")
+            monitor = None
 
     # Create workload controller using the new architecture
     workload_controller = ServiceFactory.create_workload_controller(
@@ -170,6 +243,12 @@ def main():
     final_metrics = workload_controller.fetch_metrics()
     print(f"Final metrics: {final_metrics}")
     print("Benchmark complete.")
+
+    # Stop monitor if it was running
+    if monitor is not None:
+        print("\nStopping monitor...")
+        # Monitor will stop when the daemon thread exits with the main program
+        print(f"Monitor output saved to: {args.monitor_output}")
 
     try:
         os.remove(args.workload_config_file)
