@@ -12,7 +12,7 @@ import threading
 from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime
-from src.benchmark.logging.base_log_collector import BaseLogCollector, LogSource
+from benchmark.logging.base_log_collector import BaseLogCollector, LogSource
 
 
 class TailerLogCollector(BaseLogCollector):

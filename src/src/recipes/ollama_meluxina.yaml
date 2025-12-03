@@ -3,7 +3,7 @@
 
 scenario: "ollama-meluxina-test"
 partition: "gpu"
-account: "p200776"
+account: "p200981"
 qos: "default"
 
 # HPC modules to load

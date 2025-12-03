@@ -5,7 +5,7 @@ Factory for creating log collector instances.
 from typing import Dict, Any
 from pathlib import Path
 from benchmark.logging.base_log_collector import BaseLogCollector
-from src.benchmark.logging.tailer_log_collector import TailerLogCollector
+from benchmark.logging.tailer_log_collector import TailerLogCollector
 
 # from benchmark.logging.tailer_log_collector import TailerLogCollector
 # from benchmark.logging.fluent_bit_collector import FluentBitCollector

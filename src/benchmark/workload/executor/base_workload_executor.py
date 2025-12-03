@@ -103,12 +103,25 @@ class BaseWorkloadExecutor(ABC):
 
         @self.app.route("/metrics", methods=["GET"])
         def get_metrics():
-            """Fetch collected metrics."""
+            """Fetch collected metrics in Prometheus format."""
+            # Check Accept header for content negotiation
+            accept = request.headers.get('Accept', '')
+            
+            # If Prometheus is scraping or explicit prometheus format requested
+            if 'text/plain' in accept or request.args.get('format') == 'prometheus':
+                return self._metrics_prometheus_format(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+            
+            # Default JSON format for orchestrator
             return jsonify({
                 "running": self.workload_running,
                 "metrics": self.metrics,
                 "error": self.workload_error
             }), 200
+
+        @self.app.route("/metrics/prometheus", methods=["GET"])
+        def get_metrics_prometheus():
+            """Fetch collected metrics in Prometheus text format."""
+            return self._metrics_prometheus_format(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
 
         @self.app.route("/stop", methods=["POST"])
         def stop_workload():
@@ -287,6 +300,64 @@ class BaseWorkloadExecutor(ABC):
             Service name (e.g., "ollama", "postgres")
         """
         return self.__class__.__name__.replace("WorkloadExecutor", "").lower()
+
+    def _metrics_prometheus_format(self) -> str:
+        """
+        Convert metrics to Prometheus text format.
+        
+        Returns:
+            Metrics in Prometheus exposition format
+        """
+        import socket
+        hostname = socket.gethostname()
+        service = self.get_service_name()
+        
+        lines = []
+        
+        # Running status
+        running_val = 1 if self.workload_running else 0
+        lines.append(f'# HELP {service}_workload_running Whether the workload is currently running')
+        lines.append(f'# TYPE {service}_workload_running gauge')
+        lines.append(f'{service}_workload_running{{host="{hostname}"}} {running_val}')
+        
+        if self.metrics:
+            # Total requests
+            if 'total_requests' in self.metrics:
+                lines.append(f'# HELP {service}_requests_total Total number of requests made')
+                lines.append(f'# TYPE {service}_requests_total counter')
+                lines.append(f'{service}_requests_total{{host="{hostname}"}} {self.metrics["total_requests"]}')
+            
+            # Errors
+            if 'errors' in self.metrics:
+                lines.append(f'# HELP {service}_errors_total Total number of errors')
+                lines.append(f'# TYPE {service}_errors_total counter')
+                lines.append(f'{service}_errors_total{{host="{hostname}"}} {self.metrics["errors"]}')
+            
+            # Latency
+            if 'avg_latency_seconds' in self.metrics:
+                lines.append(f'# HELP {service}_request_latency_seconds Average request latency in seconds')
+                lines.append(f'# TYPE {service}_request_latency_seconds gauge')
+                lines.append(f'{service}_request_latency_seconds{{host="{hostname}"}} {self.metrics["avg_latency_seconds"]}')
+            
+            # Throughput
+            if 'throughput_rps' in self.metrics:
+                lines.append(f'# HELP {service}_throughput_rps Requests per second')
+                lines.append(f'# TYPE {service}_throughput_rps gauge')
+                lines.append(f'{service}_throughput_rps{{host="{hostname}"}} {self.metrics["throughput_rps"]}')
+            
+            # Elapsed time
+            if 'elapsed_seconds' in self.metrics:
+                lines.append(f'# HELP {service}_elapsed_seconds Total elapsed time in seconds')
+                lines.append(f'# TYPE {service}_elapsed_seconds gauge')
+                lines.append(f'{service}_elapsed_seconds{{host="{hostname}"}} {self.metrics["elapsed_seconds"]}')
+            
+            # Number of threads
+            if 'num_threads' in self.metrics:
+                lines.append(f'# HELP {service}_threads Number of concurrent threads')
+                lines.append(f'# TYPE {service}_threads gauge')
+                lines.append(f'{service}_threads{{host="{hostname}"}} {self.metrics["num_threads"]}')
+        
+        return '\n'.join(lines) + '\n'
 
     def run(self):
         """Start the Flask server."""

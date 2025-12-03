@@ -1,235 +1,383 @@
-# Quickstart: from zero to Grafana in ~15 minutes
+# Quickstart: Ollama Benchmark with Live Metrics in Grafana
 
-This is how I set up the full monitoring pipeline end to end: MeluXina node → Pushgateway → SSH tunnel → Prometheus → Grafana.
+Run Ollama LLM benchmarks on MeluXina HPC and monitor live metrics in Grafana.
+
+**Total time: ~15 minutes**
+
+---
+
+## Configuration
+
+**Set your credentials once** (edit these values):
+
+```bash
+# Your MeluXina username
+export MLUX_USER="YOUR_USERNAME"    # e.g., u103217
+
+# Your project account
+export MLUX_ACCOUNT="YOUR_ACCOUNT"  # e.g., p200981
+
+# Path to your SSH key
+export MLUX_KEY="~/.ssh/id_ed25519_mlux"
+
+# Local workspace path
+export WORKSPACE="$HOME/hpc-benchmark-toolkit"
+```
+
+---
 
 ## Prerequisites
 
-- Docker on my laptop needed to verify the correct execution
-- SSH access to MeluXina (key + username)
-- Python 3.x (I use a venv) with psutil and prometheus_client
+- Docker Desktop running on your laptop
+- SSH access to MeluXina with your key
+- Account with GPU partition access
 
 ---
 
-## Part 1 — Copy the code to MeluXina (5 min)
+## Step 1 — Configure SSH alias
 
-On my laptop, from the repo directory to sync the source code with meluxina data:
-
-```bash
-cd ~/Documents/Università/CorsiDaSuperare/SoftwareAtelierChallenge
-
-SSH to MeluXina and go to the repo:
+**On laptop:**
 
 ```bash
-ssh -p 8822 -i ~/.ssh/id_ed25519_mlux u103217@login.lxp.lu
-cd ~/hpc-benchmark-toolkit
-```
+cat >> ~/.ssh/config << EOF
 
-On another window then:
-
-```bash
-rsync -av --progress -e "ssh -p 8822 -i ~/.ssh/id_ed25519_mlux" \
-  --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --exclude='test_metrics.csv' \
-  hpc-benchmark-toolkit \
-  u103217@login.lxp.lu:/home/users/u103217/
-```
-##To be done just when data is changed, fter accessing and identifying the port
----
-
-## Part 2 — Start Pushgateway on MeluXina (job on the cluster)
-
-I run Pushgateway as a Slurm job so it survives my terminal sessions.
-
-```bash
-cd monitoring/meluxina
-mkdir -p logs    # Slurm logs
-
-# Submit the Pushgateway job (partition/account may need adjusting)
-sbatch start_pushgateway.sh
-
-# Check it's running and note the node name (NODES column)
-squeue -u "$USER" -n pushgateway
-```
-
-Once the job is RUNNING, Pushgateway will listen on http://<compute-node>:9091 on that node.
-
----
-
-## Part 3 — Start the local stack (Prometheus + Grafana + local Pushgateway)
-
-On my laptop, no meluxina: 
-
-```bash
-cd monitoring
-chmod +x start.sh stop.sh
-./start.sh
-```
-
-Ports I use locally:
-- Prometheus: http://localhost:9092
-- Grafana: http://localhost:3001
-- Local Pushgateway (for local tests only): http://localhost:9093
-
----
-
-## Part 4 — Open the SSH tunnel from laptop → MeluXina
-
-I forward a local port to the compute node where Pushgateway is running:
-
-```bash
-# Replace <node> with the value of the pushgateway from squeue NODELIST (e.g., melxxxx)
-ssh -p 8822 -i ~/.ssh/id_ed25519_mlux -N -L 19091:<node>:9091 u103217@login.lxp.lu
-```
-
-Keep this terminal open. Prometheus will scrape the tunneled target at http://localhost:19091.
-
----
-
-## Part 5 — Run the Monitor on a MeluXina compute node (3–5 min)
-
-Allocate a node and set up a small venv:
-
-```bash
-salloc -A <account> -p <partition> -N 1 --t 15
-## for me: salloc -q default -p gpu --time=30 -A p200981
-
-# Virtual environment setup
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install all dependencies (Monitor + Orchestrator)
-pip install flask requests psutil prometheus_client pyyaml
-
-```
-
-Get the Pushgateway node hostname and verify it's reachable (do NOT assume localhost unless you allocated the same node):
-
-```bash
-PG_NODE=$(squeue -u u103217 -n pushgateway -h -o %N)
-echo "Pushgateway node: $PG_NODE"
-curl -s "http://$PG_NODE:9091/metrics" | head -5
-export PUSHGATEWAY_URL="http://$PG_NODE:9091"
-```
-
-Run the Monitor for 60 seconds and push to that Pushgateway:
-
-```bash
-python3 - <<'PY'
-import sys, os
-sys.path.insert(0, os.path.expanduser('~/hpc-benchmark-toolkit/src'))
-from monitor.monitor import Monitor
-
-push_url = os.environ.get('PUSHGATEWAY_URL', 'http://localhost:9091')
-
-m = Monitor(
-    output_file='test_metrics.csv',
-    interval=2,
-    log_console=True,
-    metrics=('gpu','cpu','ram'),
-    max_duration=120,
-    prometheus_pushgateway_url=push_url,
-    prometheus_grouping_labels={'source':'meluxina'},
-)
-m_print = lambda msg: print(f"[monitor] {msg}")
-m_print(f"Pushing to {push_url}")
-m.run()
-PY
-```
----
-## Part 7 — See the data in Grafana (2 min)
-
-On my laptop:
-1) Open http://localhost:3001 (Grafana)
-2) Log in with admin / admin
-3) Open the dashboard “HPC Benchmark Monitor”
-4) I should see the time series from my laptop and from the MeluXina node (look at the instance label)
-
-Success if data shows up. 🚀
-
----
-
-## Part 8 — Using the Monitor from the orchestrator
-
-The orchestrator has built-in monitoring support. Use it to collect metrics automatically during your benchmark runs.
-
-### Find your allocated nodes
-
-```bash
-# Check your active jobs
-squeue -u "$USER"
-
-# If you have interactive allocations, get node names
-scontrol show hostname $SLURM_JOB_NODELIST
-```
-
-### Run benchmark with monitoring
-
-```bash
-cd ~/hpc-benchmark-toolkit
-export PYTHONPATH="$PWD/src:$PYTHONPATH"
-
-# Find Pushgateway node
-PG_NODE=$(squeue -u $USER -n pushgateway -h -o %N)
-echo "Pushgateway node: $PG_NODE"
-
-# Create dummy config for testing
-cat > config.json << 'EOF'
-{
-  "service": "dummy",
-  "model": "test-model",
-  "clients_per_node": 1
-}
+Host meluxina
+    HostName login.lxp.lu
+    Port 8822
+    User $MLUX_USER
+    IdentityFile $MLUX_KEY
 EOF
-
-# Get your allocated node
-MYNODE=$(hostname)
-
-# Run orchestrator with monitoring
-python3 src/benchmark/orchestrator.py \
-  --server-nodes $MYNODE \
-  --client-nodes $MYNODE \
-  --workload-config-file config.json \
-  --enable-monitoring \
-  --pushgateway-node $PG_NODE \
-  --monitor-interval 2 \
-  --monitor-output results/metrics.csv
 ```
 
-**What happens:**
-- Monitor runs in background thread during the entire benchmark
-- Collects CPU/RAM/GPU metrics every 2 seconds
-- Pushes to Pushgateway → visible in Grafana in real-time
-- Saves local CSV to `results/metrics.csv`
-- Dummy service completes immediately (for testing monitoring only)
-
-**To see CPU oscillations in Grafana:**
-
-Still to undestand how to create worklosd
-
-**Check results:**
-
+**Test:**
 ```bash
-# View CSV
-cat results/metrics.csv | tail -20
-
-# Verify push to Pushgateway
-curl -s http://$PG_NODE:9091/metrics | grep "cpu_usage_percent.*mel"
-```
-
-**Without monitoring** (original behavior):
-```bash
-python3 src/benchmark/orchestrator.py \
-  --server-nodes mel2100 \
-  --client-nodes mel2105 mel2004 \
-  --workload-config-file config.json
+ssh meluxina "echo Connected as \$USER"
 ```
 
 ---
 
-## What I expect to work at the end
+## Step 2 — Clone and sync code
 
-- Monitor collects CPU/RAM/GPU metrics on MeluXina
-- Pushgateway (on the node) stores the latest metrics
-- Prometheus (local) scrapes via the SSH tunnel
-- Grafana (local) shows everything in near real-time
+```bash
+# Clone repo (if not already done)
+git clone https://github.com/EUMASTERHPC2526-TEAM-8/hpc-benchmark-toolkit.git $WORKSPACE
 
-Total time: about 15 minutes.
+# Sync to MeluXina
+rsync -av --exclude='.git' --exclude='__pycache__' \
+  $WORKSPACE meluxina:~/
+```
+
+---
+
+## Step 3 — Update recipe with your account
+
+```bash
+# Edit recipe to use your account
+sed -i '' "s/account: .*/account: \"$MLUX_ACCOUNT\"/" \
+  $WORKSPACE/src/src/recipes/ollama_meluxina.yaml
+
+# Verify
+grep account $WORKSPACE/src/src/recipes/ollama_meluxina.yaml
+```
+
+---
+
+## Step 4 — Start local monitoring stack
+
+```bash
+cd $WORKSPACE/monitoring
+./start.sh
+
+# Services available at:
+# - Grafana:    http://localhost:3001 (admin/admin)
+# - Prometheus: http://localhost:9092
+```
+
+---
+
+## Step 5 — Deploy and run benchmark
+
+```bash
+cd $WORKSPACE/src
+
+# Create output directory with timestamp
+OUTPUT_DIR=/home/users/$MLUX_USER/benchmark_$(date +%Y%m%d_%H%M%S)
+
+# Deploy and submit
+./deploy_and_run.sh \
+  src/recipes/ollama_meluxina.yaml \
+  meluxina \
+  $OUTPUT_DIR
+
+# Wait for job to start (check until STATE is RUNNING)
+ssh meluxina "squeue -u \$USER"
+```
+
+---
+
+## Step 6 — Get allocated nodes
+
+Once job is RUNNING:
+
+```bash
+# Get node list
+ssh meluxina "squeue -u \$USER -o '%N' -h"
+
+# Example output: mel[2033-2035]
+# - First node (mel2033): Ollama server
+# - Second node (mel2034): Client executor ← MONITOR THIS ONE
+# - Third node (mel2035): Orchestrator
+```
+
+**Note the second node** (client) - you need it for the tunnel.
+
+---
+
+## Step 7 — Open SSH tunnel to client executor
+
+**Replace `melXXXX` with your actual client node (second node from Step 6):**
+
+```bash
+# Open tunnel in background
+ssh -fN -L 25000:melXXXX:6000 meluxina
+
+# Example: ssh -fN -L 25000:mel2034:6000 meluxina
+
+# Verify tunnel works
+curl http://localhost:25000/health
+# Should return: {"service":"ollama","status":"ok"}
+```
+
+---
+
+## Step 8 — View live metrics in Grafana
+
+1. Open **http://localhost:3001** (admin/admin)
+
+2. Go to **Explore** (compass icon 🧭 in left sidebar)
+
+3. Select **Prometheus** as data source
+
+4. Try these queries:
+
+### Workload Status
+```promql
+ollama_workload_running
+```
+Shows `1` when benchmark is running, `0` when complete.
+
+### Requests & Throughput
+```promql
+ollama_requests_total
+```
+```promql
+ollama_throughput_rps
+```
+
+### Latency
+```promql
+ollama_request_latency_seconds
+```
+
+### Errors
+```promql
+ollama_errors_total
+```
+
+5. Click **Run query** or press `Shift+Enter`
+
+6. Enable **auto-refresh** (top right dropdown → 5s) to see live updates
+
+---
+
+## Step 10 — Check results after completion
+
+```bash
+ssh meluxina
+
+# List your benchmark directories
+ls -la ~/benchmark_*
+
+# Navigate to latest output directory
+cd ~/benchmark_*/experiments/*/
+
+# View aggregated logs
+cat stdout.log
+
+# View orchestrator summary
+tail -50 orchestrator.log
+```
+
+---
+
+## Quick Reference
+
+### Start new benchmark
+```bash
+cd $WORKSPACE/src
+OUTPUT_DIR=/home/users/$MLUX_USER/benchmark_$(date +%Y%m%d_%H%M%S)
+./deploy_and_run.sh src/recipes/ollama_meluxina.yaml meluxina $OUTPUT_DIR
+```
+
+### Update tunnel for new job
+```bash
+# Kill old tunnels
+pkill -f "ssh.*25000"
+
+# Get client node (second in list)
+ssh meluxina "squeue -u \$USER -o '%N' -h"
+
+# Open new tunnel (replace melXXXX)
+ssh -fN -L 25000:melXXXX:6000 meluxina
+
+# Verify
+curl http://localhost:25000/health
+```
+
+### Check job status
+```bash
+ssh meluxina "squeue -u \$USER"
+```
+
+### Cancel job
+```bash
+ssh meluxina "scancel JOBID"
+```
+
+### Restart monitoring stack
+```bash
+cd $WORKSPACE/monitoring
+./stop.sh && ./start.sh
+```
+
+---
+
+## Metrics Reference
+
+| Metric | Description | Type |
+|--------|-------------|------|
+| `ollama_workload_running` | 1 if benchmark running, 0 if complete | Gauge |
+| `ollama_requests_total` | Total requests made | Counter |
+| `ollama_errors_total` | Total errors | Counter |
+| `ollama_request_latency_seconds` | Average latency in seconds | Gauge |
+| `ollama_throughput_rps` | Requests per second | Gauge |
+| `ollama_elapsed_seconds` | Total elapsed time | Gauge |
+| `ollama_threads` | Number of concurrent threads | Gauge |
+
+---
+
+## Troubleshooting
+
+### Job stuck in PENDING
+```bash
+# Check GPU availability
+ssh meluxina "sinfo -p gpu"
+
+# Check account permissions
+ssh meluxina "sacctmgr show assoc user=\$USER format=account,partition"
+```
+
+### Tunnel connection refused
+```bash
+# Wait 60+ seconds after job starts for executor to initialize
+# Check if port 6000 is open on node
+ssh meluxina "squeue -u \$USER"  # Get job ID
+ssh meluxina "srun --jobid=JOBID --nodelist=melXXXX ss -tulpn | grep 6000"
+```
+
+### No metrics in Grafana
+```bash
+# 1. Check Prometheus targets
+open http://localhost:9092/targets
+# ollama-clients should be UP
+
+# 2. Verify tunnel is working
+curl http://localhost:25000/health
+
+# 3. Check metrics endpoint
+curl http://localhost:25000/metrics/prometheus
+```
+
+### Permission denied on rsync
+```bash
+# OUTPUT_DIR must be absolute path
+# ✅ Correct: /home/users/u103217/benchmark_20231203
+# ❌ Wrong:   benchmark_20231203
+
+echo $OUTPUT_DIR  # Verify it starts with /home/users/
+```
+
+### Prometheus target DOWN
+```bash
+# Kill and recreate tunnel
+pkill -f "ssh.*25000"
+ssh -fN -L 25000:melXXXX:6000 meluxina
+
+# Restart Prometheus
+cd $WORKSPACE/monitoring
+docker compose restart prometheus
+```
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        MeluXina HPC                         │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │  mel2033    │  │  mel2034    │  │  mel2035    │         │
+│  │   Ollama    │  │   Client    │  │ Orchestrator│         │
+│  │   Server    │◄─│  Executor   │◄─│             │         │
+│  │   :11434    │  │   :6000     │  │             │         │
+│  └─────────────┘  └──────┬──────┘  └─────────────┘         │
+│                          │                                  │
+└──────────────────────────┼──────────────────────────────────┘
+                           │ SSH Tunnel
+                           │ -L 25000:mel2034:6000
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                         Laptop                              │
+│  ┌─────────────┐       ┌─────────────┐                     │
+│  │  Prometheus │──────►│   Grafana   │                     │
+│  │   :9092     │scrape │   :3001     │                     │
+│  └──────┬──────┘       └─────────────┘                     │
+│         │                                                   │
+│         ▼ scrapes localhost:25000/metrics/prometheus        │
+│  ┌─────────────┐                                           │
+│  │   Docker    │                                           │
+│  │   Network   │                                           │
+│  └─────────────┘                                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Example Session with Giovanni account
+
+```bash
+# 1. Set credentials
+export MLUX_USER="u103217"
+export MLUX_ACCOUNT="p200981"
+export WORKSPACE="$HOME/hpc-benchmark-toolkit"
+
+# 2. Start monitoring
+cd $WORKSPACE/monitoring && ./start.sh
+
+# 3. Deploy benchmark
+cd $WORKSPACE/src
+OUTPUT_DIR=/home/users/$MLUX_USER/benchmark_$(date +%Y%m%d_%H%M%S)
+./deploy_and_run.sh src/recipes/ollama_meluxina.yaml meluxina $OUTPUT_DIR
+
+# 4. Wait for RUNNING, get client node
+ssh meluxina "squeue -u \$USER"
+# Output: mel[2033-2035] → client is mel2034
+
+# 5. Open tunnel
+ssh -fN -L 25000:mel2034:6000 meluxina
+
+# 6. Open Grafana
+open http://localhost:3001
+# Login: admin/admin
+# Explore → Prometheus → ollama_requests_total → Run query
+```

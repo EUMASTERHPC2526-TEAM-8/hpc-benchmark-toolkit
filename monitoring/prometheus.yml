@@ -16,7 +16,7 @@ global:
 #   - "alerts/*.yml"
 
 scrape_configs:
-  # Scrape Pushgateway on MeluXina
+  # Scrape Pushgateway on MeluXina (system metrics)
   - job_name: 'pushgateway'
     honor_labels: true
     honor_timestamps: true
@@ -41,6 +41,21 @@ scrape_configs:
         regex: ''
         target_label: instance
         replacement: 'unknown'
+
+  # Scrape workload executors (Ollama application metrics)
+  # These expose /metrics/prometheus endpoint in Prometheus format
+  # Note: Requires tunnel for each executor node
+  - job_name: 'ollama-clients'
+    metrics_path: '/metrics/prometheus'
+    static_configs:
+      # Add your client node targets here
+      # Update these based on allocated nodes and executor port (default 6000)
+      - targets:
+        - 'host.docker.internal:25000'  # Tunnel: -L 25000:mel2142:6000
+        - 'host.docker.internal:25001'  # Tunnel: -L 25001:mel2xxx:6000
+        # Add more as needed
+    scrape_interval: 5s
+    scrape_timeout: 5s
 
   # Optional: Direct scrape from compute nodes (only if network-accessible)
   # Usually not possible in HPC due to firewall

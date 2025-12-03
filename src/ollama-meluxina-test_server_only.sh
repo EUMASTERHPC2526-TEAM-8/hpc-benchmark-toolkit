@@ -1,22 +1,26 @@
 #!/bin/bash -l
 #SBATCH --job-name=ollama-meluxina-test
 #SBATCH --partition=gpu
-#SBATCH --account=p200776
+#SBATCH --account=p200981
 #SBATCH --nodes=3
 #SBATCH --ntasks=3
 #SBATCH --cpus-per-task=2
 #SBATCH --qos=default
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:2
 #SBATCH --mem=32G
 #SBATCH --time=02:00:00
-#SBATCH --output=logs/ollama-meluxina-test_20251011_174217_%j.out
-#SBATCH --error=logs/ollama-meluxina-test_20251011_174217_%j.err
+#SBATCH --output=logs/ollama-meluxina-test_20251203_222628_%j.out
+#SBATCH --error=logs/ollama-meluxina-test_20251203_222628_%j.err
 
 set -e
-export OUTPUT_DIR="$(pwd)/experiments/ollama-meluxina-test_20251011_174217"
+export OUTPUT_DIR="$(pwd)/experiments/ollama-meluxina-test_20251203_222628"
 mkdir -p $OUTPUT_DIR
 mkdir -p /project/home/p200776/team8/containers/
 BENCHMARK_DIR="$(pwd)/benchmark"
+
+# Create bind mount directories if they don't exist
+mkdir -p /project/home/p200776/team8/.ollama
+mkdir -p /project/home/p200776/team8/
 
 NODES=($(scontrol show hostname $SLURM_NODELIST))
 SERVER_NODE_LIST="${NODES[@]:0:1}"
@@ -25,7 +29,7 @@ ORCH_NODE="${NODES[-1]}"
 
 module load Apptainer
 
-echo "Experiment ID: ollama-meluxina-test_20251011_174217"
+echo "Experiment ID: ollama-meluxina-test_20251203_222628"
 echo "Server nodes: $SERVER_NODE_LIST"
 echo "Client nodes: $CLIENT_NODE_LIST"
 echo "Orchestrator node: $ORCH_NODE"
@@ -48,8 +52,8 @@ echo "Starting ollama services on $SERVER_NODE_LIST..."
 # Launch service containers on server nodes
 # Service-specific command and port are determined by the service type
 for NODE in $SERVER_NODE_LIST; do
-    srun --nodes=1 --ntasks=1 --gpus=1 --nodelist=$NODE --cpus-per-task=1 --output=$OUTPUT_DIR/container_${NODE}.log \
-        bash -c "apptainer exec --nv /project/home/p200776/team8/containers//ollama_latest.sif bash -c 'export OLLAMA_HOST=0.0.0.0:11434; ollama serve;'" &
+    srun --nodes=1 --ntasks=1 --gpus=2 --nodelist=$NODE --cpus-per-task=1 --output=$OUTPUT_DIR/container_${NODE}.log \
+        bash -c "apptainer exec --nv --bind /project/home/p200776/team8/.ollama:/root/.ollama:rw --bind /project/home/p200776/team8/:/scratch:rw /project/home/p200776/team8/containers//ollama_latest.sif bash -c 'export OLLAMA_HOST=0.0.0.0:11434; ollama serve;'" &
     pids+=($!)
 done
 
@@ -61,7 +65,7 @@ echo "Starting workload executor servers on $CLIENT_NODE_LIST..."
     # Launch workload executor servers on client nodes
     # These run the general workload_executor entry point and select the correct service implementation
     for NODE in $CLIENT_NODE_LIST; do
-        srun --nodes=1 --nodelist=$NODE --ntasks=1 --cpus-per-task=2 --output=$OUTPUT_DIR/client_${NODE}.log             bash -c "apptainer exec /project/home/p200776/team8/containers//python_3_12_3_v2.sif bash -c 'pip install flask && python3 -m benchmark.workload.workload_executor --service ollama --port 6000'" &
+        srun --nodes=1 --nodelist=$NODE --ntasks=1 --cpus-per-task=2 --output=$OUTPUT_DIR/client_${NODE}.log             bash -c "apptainer exec /project/home/p200776/team8/containers//python_3_12_3_v2.sif bash -c 'pip install flask requests && python3 -m benchmark.workload.workload_executor --service ollama --port 6000'" &
         pids+=($!)
     done
 
@@ -76,7 +80,7 @@ echo "Starting orchestrator on $ORCH_NODE..."
 # 2. Creates WorkloadController (service-specific) to coordinate client execution
 srun --nodes=1 --nodelist=$ORCH_NODE --ntasks=1 --cpus-per-task=1 --output=$OUTPUT_DIR/orchestrator.log \
     bash -c "apptainer exec /project/home/p200776/team8/containers//python_3_12_3_v2.sif bash -c \
-    'python3 -m benchmark.orchestrator \
+    'pip install pyyaml requests flask && python3 -m benchmark.orchestrator \
         --server-nodes $SERVER_NODE_LIST \
         --client-nodes $CLIENT_NODE_LIST \
         --client-port 6000 \
@@ -88,6 +92,6 @@ pids+=($!)
 
 echo "Nodes launched, waiting for orchestrator to finish..."
 
-wait orchestrator_pid
+wait $orchestrator_pid
 echo "Experiment complete."
 

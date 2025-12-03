@@ -179,7 +179,7 @@ echo "Starting workload executor servers on $CLIENT_NODE_LIST..."
     # These run the general workload_executor entry point and select the correct service implementation
     for NODE in $CLIENT_NODE_LIST; do
         srun --nodes=1 --nodelist=$NODE --ntasks=1 --cpus-per-task={cpus_clients} --output=$OUTPUT_DIR/client_${{NODE}}.log \
-            bash -c "apptainer exec {python_image_path} bash -c 'pip install flask && python3 -m benchmark.workload.workload_executor --service {service_type} --port {CLIENT_PORT}'" &
+            bash -c "apptainer exec {python_image_path} bash -c 'pip install flask requests && python3 -m benchmark.workload.workload_executor --service {service_type} --port {CLIENT_PORT}'" &
         pids+=($!)
     done
 
@@ -194,7 +194,7 @@ echo "Starting orchestrator on $ORCH_NODE..."
 # 2. Creates WorkloadController (service-specific) to coordinate client execution
 srun --nodes=1 --nodelist=$ORCH_NODE --ntasks=1 --cpus-per-task=1 --output=$OUTPUT_DIR/orchestrator.log \\
     bash -c "apptainer exec {python_image_path} bash -c \\
-    'python3 -m benchmark.orchestrator \\
+    'pip install pyyaml requests flask && python3 -m benchmark.orchestrator \\
         --server-nodes $SERVER_NODE_LIST \\
         --client-nodes $CLIENT_NODE_LIST \\
         --client-port {CLIENT_PORT} \\
@@ -206,7 +206,7 @@ pids+=($!)
 
 echo "Nodes launched, waiting for orchestrator to finish..."
 
-wait orchestrator_pid
+wait $orchestrator_pid
 echo "Experiment complete."
 
 """
