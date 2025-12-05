@@ -7,10 +7,9 @@ collecting metrics, etc.).
 """
 
 from abc import ABC, abstractmethod
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from typing import Dict, Any, Optional, List
 import threading
-
 
 class BaseWorkloadExecutor(ABC):
     """
@@ -103,7 +102,7 @@ class BaseWorkloadExecutor(ABC):
 
         @self.app.route("/metrics", methods=["GET"])
         def get_metrics():
-            """Fetch collected metrics in Prometheus format."""
+            """Fetch collected metrics in Prometheus format in JSON format (legacy endpoint)."""
             # Check Accept header for content negotiation
             accept = request.headers.get('Accept', '')
             

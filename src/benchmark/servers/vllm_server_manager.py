@@ -4,9 +4,10 @@ vLLM-specific server manager implementation.
 Handles vLLM server lifecycle:
 - Health checks via /health endpoint
 - Model pulling/loading via OpenAI-compatible API
+- Distributed vLLM with Ray for tensor/pipeline parallelism
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import time
 import threading
 from benchmark.servers.base_server_manager import BaseServerManager
@@ -19,6 +20,10 @@ class VllmServerManager(BaseServerManager):
 
     Manages vLLM server health checks and model preparation.
     vLLM uses OpenAI-compatible API endpoints.
+
+    Supports both:
+    - Single-node vLLM (traditional container-per-node)
+    - Multi-node distributed vLLM (Ray-based tensor/pipeline parallelism)
     """
 
     def __init__(self, config: Dict[str, Any]):
@@ -26,27 +31,57 @@ class VllmServerManager(BaseServerManager):
         Initialize vLLM server manager.
 
         Args:
-            config: Configuration containing model name and other vLLM settings
+            config: Configuration containing:
+                - model: Model name
+                - service_config: vLLM-specific settings
+                    - distributed: Distributed configuration (optional)
+                        - enabled: Whether to use distributed vLLM
+                        - tensor_parallel_size: GPUs for tensor parallelism
+                        - pipeline_parallel_size: Stages for pipeline parallelism
+                        - ray: Ray cluster configuration
         """
         super().__init__(config)
         self.model = config.get("model")
         if not self.model:
             raise ValueError("vLLM configuration must include 'model' parameter")
 
+        # Extract distributed configuration
+        service_config = config.get("service_config", {})
+        self.distributed_config = service_config.get("distributed", {})
+        self.is_distributed = self.distributed_config.get("enabled", False)
+
+        if self.is_distributed:
+            self.tensor_parallel_size = self.distributed_config.get("tensor_parallel_size", 1)
+            self.pipeline_parallel_size = self.distributed_config.get("pipeline_parallel_size", 1)
+            self.ray_config = self.distributed_config.get("ray", {})
+            print(f"Distributed vLLM enabled: TP={self.tensor_parallel_size}, PP={self.pipeline_parallel_size}")
+        else:
+            print("Single-node vLLM mode")
+
     def verify_health(self, endpoints: List[str], timeout: int = 600) -> bool:
         """
         Verify vLLM server health by checking /health endpoint.
 
+        For distributed vLLM, only the head node exposes the API endpoint.
+        For single-node vLLM, all endpoints are checked.
+
         Args:
             endpoints: List of vLLM server URLs (e.g., ["http://node1:8000"])
+                       For distributed mode, only first endpoint is the API server
             timeout: Maximum time in seconds to wait for each endpoint
 
         Returns:
             True if all endpoints are healthy, False otherwise
         """
-        print(f'Checking health of {len(endpoints)} vLLM endpoints with timeout {timeout}s each...')
+        if self.is_distributed:
+            print(f'Distributed vLLM mode: checking health of head node endpoint only...')
+            # In distributed mode, only the head node has the API server
+            endpoints_to_check = [endpoints[0]] if endpoints else []
+        else:
+            print(f'Checking health of {len(endpoints)} vLLM endpoints with timeout {timeout}s each...')
+            endpoints_to_check = endpoints
 
-        self.prepare_service(endpoints, timeout=timeout)
+        self.prepare_service(endpoints_to_check, timeout=timeout)
 
         print("All vLLM endpoints are healthy.")
         return True
@@ -196,6 +231,7 @@ class VllmServerManager(BaseServerManager):
         Returns:
             Dict containing:
                 - model: Model name to use
+                - service_config: vLLM-specific settings including distributed config
                 - Any other vLLM-specific settings
 
         Raises:
@@ -208,9 +244,36 @@ class VllmServerManager(BaseServerManager):
         if not model:
             raise ValueError("vLLM recipe must specify 'workload.model'")
 
+        service_config = servers.get("service_config", {})
+
+        # Validate distributed configuration if enabled
+        distributed_config = service_config.get("distributed", {})
+        if distributed_config.get("enabled", False):
+            tensor_parallel = distributed_config.get("tensor_parallel_size", 1)
+            pipeline_parallel = distributed_config.get("pipeline_parallel_size", 1)
+
+            print(f"Distributed vLLM configuration detected:")
+            print(f"  - Tensor parallel size: {tensor_parallel}")
+            print(f"  - Pipeline parallel size: {pipeline_parallel}")
+
+            # Validate that we have enough server nodes
+            server_nodes = recipe_config.get("orchestration", {}).get("node_allocation", {}).get("servers", {}).get("nodes", 1)
+            gpus_per_node = recipe_config.get("resources", {}).get("servers", {}).get("gpus", 1)
+            total_gpus = server_nodes * gpus_per_node
+
+            required_gpus = tensor_parallel * pipeline_parallel
+
+            if required_gpus > total_gpus:
+                raise ValueError(
+                    f"Distributed vLLM requires {required_gpus} GPUs "
+                    f"(TP={tensor_parallel} × PP={pipeline_parallel}), "
+                    f"but recipe only allocates {total_gpus} GPUs "
+                    f"({server_nodes} nodes × {gpus_per_node} GPUs/node)"
+                )
+
         config = {
             "model": model,
-            "service_config": servers.get("service_config", {})
+            "service_config": service_config
         }
 
         return config

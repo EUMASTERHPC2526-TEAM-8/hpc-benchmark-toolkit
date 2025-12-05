@@ -12,12 +12,12 @@ modules:
 
 orchestration:
   mode: "slurm"
-  total_nodes: 2
+  total_nodes: 5
   node_allocation:
     servers:
-      nodes: 1
+      nodes: 2
     clients:
-      nodes: 1
+      nodes: 2
     monitors:
       nodes: 1
   job_config:

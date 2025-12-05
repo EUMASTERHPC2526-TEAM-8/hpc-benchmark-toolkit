@@ -2,6 +2,7 @@
 # Matches __pycache__ at any level
 __pycache__/
 **/__pycache__/
+*.DS_Store
 
 # Ignore compiled Python files
 *.py[cod]

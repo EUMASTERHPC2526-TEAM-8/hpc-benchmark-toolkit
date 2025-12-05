@@ -1,0 +1,102 @@
+# Test recipe for distributed vLLM
+# 2 server nodes + 2 client nodes + 1 orchestrator = 5 total nodes
+# Each client runs 10 threads (20 concurrent requests total)
+
+scenario: "vllm-distributed-test-2nodes"
+partition: "gpu"  # Update to your partition name
+account: "p200981"  # Update to your account
+qos: "default"
+
+# HPC modules to load (adjust for your system)
+modules:
+  - "Apptainer"
+
+orchestration:
+  mode: "slurm"
+  total_nodes: 5  # 2 vLLM nodes + 2 clients + 1 orchestrator
+  node_allocation:
+    servers:
+      nodes: 2  # 2-node vLLM cluster (1 head + 1 worker)
+    clients:
+      nodes: 2  # 2 client nodes
+  job_config:
+    time_limit: "00:30:00"  # 30 minutes for testing
+    exclusive: true
+
+resources:
+  servers:
+    gpus: 2  # GPUs per server node (2 nodes × 2 GPUs = 4 total GPUs)
+    cpus_per_task: 4
+    mem_gb: 64
+  clients:
+    gpus: 0  # Clients don't need GPUs
+    cpus_per_task: 4  # Enough CPUs for 10 threads
+    mem_gb: 16
+
+workload:
+  component: "inference"
+  service: "vllm"
+  clients_per_node: 10  # 10 concurrent threads per client node (20 total)
+  duration: "5m"  # Run for 5 minutes
+  warmup: "30s"  # 30 second warmup
+
+  # Choose a model based on your needs:
+  # - Small/fast: "facebook/opt-1.3b" (~5GB)
+  # - Medium: "meta-llama/Llama-2-7b-hf" (~13GB, requires HF token)
+  # - Large: "meta-llama/Llama-2-13b-hf" (~26GB, requires HF token)
+  model: "facebook/opt-1.3b"
+
+servers:
+  health_check:
+    enabled: true
+    timeout: 600  # 10 minutes for model download + initialization
+    interval: 5
+    endpoint: "/health"
+
+  service_config:
+    # Distributed vLLM configuration
+    distributed:
+      enabled: true
+      backend: "ray"
+
+      # Tensor parallelism: split model across all GPUs
+      # 2 nodes × 2 GPUs = 4 total GPUs
+      tensor_parallel_size: 4
+
+      # Pipeline parallelism (keep at 1 for most cases)
+      pipeline_parallel_size: 1
+
+      # Ray cluster configuration
+      ray:
+        dashboard_port: 8265
+        object_manager_port: 8076
+        node_manager_port: 8077
+        num_cpus_per_node: 4
+        num_gpus_per_node: 2
+
+    # vLLM server configuration
+    max_model_len: 2048  # Maximum sequence length
+    gpu_memory_utilization: 0.7  # Use 70% of GPU memory
+    enforce_eager: true  # Allow CUDA graphs for better performance
+    trust_remote_code: false
+
+artifacts:
+  # Update these paths for your system
+  containers_dir: "/project/home/p200776/team8/containers/"
+  service:
+    path: "vllm_0_5_0.sif"
+    remote: "docker://vllm/vllm-openai:v0.5.0"
+  python:
+    path: "python_3_12_3_v2.sif"
+    remote: "docker://python:3.12.3-slim"
+
+binds:
+  # Update these paths for your system
+  # HuggingFace model cache (shared across all nodes)
+  - "/project/home/p200776/team8/.cache/huggingface:/root/.cache/huggingface:rw"
+
+  # Ray temporary directory (shared across all nodes)
+  - "/project/home/p200776/team8/ray_tmp:/tmp/ray:rw"
+
+  # Shared workspace
+  - "/project/home/p200776/team8/:/scratch:rw"
