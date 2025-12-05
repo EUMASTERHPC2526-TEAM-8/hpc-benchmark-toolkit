@@ -8,6 +8,9 @@ class Response:
         self.text = data
         self.ok = 200 <= status < 300
 
+    def json(self):
+        return js.loads(self.text)
+
 def get(url, timeout=5):
     parsed = urllib.parse.urlparse(url)
     conn_class = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
