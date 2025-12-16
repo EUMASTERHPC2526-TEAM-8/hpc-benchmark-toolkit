@@ -23,9 +23,9 @@ scrape_configs:
     static_configs:
       # Target 1: Pushgateway locale (docker-compose)
       - targets: ['pushgateway:9091']
-      # Target 2: Tunnel verso Pushgateway remoto su MeluXina
-      # Assicurati di avere il tunnel aperto: -L 19091:<mel-node>:9091
-      - targets: ['host.docker.internal:19091']
+      # Target 2: Tunnel to remote Pushgateway on MeluXina
+      # Assure to have the tunnel open: -L 19091:<mel-node>:9091
+      - targets: ['localhost:19091']
     
     # Increase timeout for HPC environments
     scrape_timeout: 10s
@@ -42,24 +42,43 @@ scrape_configs:
         target_label: instance
         replacement: 'unknown'
 
-  # Scrape workload executors (Ollama application metrics)
+  # Scrape workload executors (Ollama/vLLM application metrics)
   # These expose /metrics/prometheus endpoint in Prometheus format
   # Note: Requires tunnel for each executor node
+  # - Workload executor (port 6000): Run-time metrics (throughput, latency, requests)
+  # - Ollama server (port 11434): Service metrics (model load time, inference, etc)
   - job_name: 'ollama-clients'
     metrics_path: '/metrics/prometheus'
     static_configs:
-      # Add your client node targets here
-      # Update these based on allocated nodes and executor port (default 6000)
       - targets:
-        - 'host.docker.internal:25000'  # Tunnel: -L 25000:mel2142:6000
-        - 'host.docker.internal:25001'  # Tunnel: -L 25001:mel2xxx:6000
-        # Add more as needed
+        - 'host.docker.internal:25000'  # Tunnel: -L 25000:mel*:6000 (workload executor)
+        - 'host.docker.internal:25001'  # Tunnel: -L 25001:mel*:11434 (ollama server)
+        - 'host.docker.internal:25002'  # Tunnel: -L 25002:mel*:6000 (additional nodes)
+        - 'host.docker.internal:25003'  # Tunnel: -L 25003:mel*:11434 (additional nodes)
+        # Add more as needed (25004, 25005, ...)
     scrape_interval: 5s
     scrape_timeout: 5s
 
   # Optional: Direct scrape from compute nodes (only if network-accessible)
   # Usually not possible in HPC due to firewall
   # - job_name: 'hpc-nodes-direct'
+
+  # Scrape vLLM workload executors
+  # Uses the same port mapping as Ollama; keep separate job name for dashboard distinction
+  - job_name: 'vllm-clients'
+    metrics_path: '/metrics/prometheus'
+    static_configs:
+      - targets:
+        - 'host.docker.internal:25000'  # Primary executor node
+        - 'host.docker.internal:25001'  # Secondary executor node
+        - 'host.docker.internal:25002'  # Additional nodes
+        - 'host.docker.internal:25003'
+    scrape_interval: 5s
+    scrape_timeout: 5s
+
+    # Optional: Direct scrape from compute nodes (only if network-accessible)
+    # Usually not possible in HPC due to firewall
+    # - job_name: 'hpc-nodes-direct'
   #   static_configs:
   #     - targets:
   #       - 'mel0001:9100'

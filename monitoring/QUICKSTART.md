@@ -2,8 +2,6 @@
 
 Run Ollama LLM benchmarks on MeluXina HPC and monitor live metrics in Grafana.
 
-**Total time: ~15 minutes**
-
 ---
 
 ## Configuration
@@ -21,7 +19,9 @@ export MLUX_ACCOUNT="YOUR_ACCOUNT"  # e.g., p200981
 export MLUX_KEY="~/.ssh/id_ed25519_mlux"
 
 # Local workspace path
-export WORKSPACE="$HOME/hpc-benchmark-toolkit"
+export WORKSPACE="$../hpc-benchmark-toolkit"
+#My case
+export WORKSPACE="/Users/giovanni/Documents/Università/CorsiDaSuperare/SoftwareAtelierChallenge/hpc-benchmark-toolkit"
 ```
 
 ---
@@ -76,6 +76,9 @@ rsync -av --exclude='.git' --exclude='__pycache__' \
 sed -i '' "s/account: .*/account: \"$MLUX_ACCOUNT\"/" \
   $WORKSPACE/src/src/recipes/ollama_meluxina.yaml
 
+sed -i '' "s/account: .*/account: \"$MLUX_ACCOUNT\"/" \
+  $WORKSPACE/src/src/recipes/vllm_meluxina_distributed.yaml
+
 # Verify
 grep account $WORKSPACE/src/src/recipes/ollama_meluxina.yaml
 ```
@@ -95,7 +98,7 @@ cd $WORKSPACE/monitoring
 
 ---
 
-## Step 5 — Deploy and run benchmark
+## Step 5 — Deploy and run benchmark (Ollama or VLLM)
 
 ```bash
 cd $WORKSPACE/src
@@ -103,9 +106,15 @@ cd $WORKSPACE/src
 # Create output directory with timestamp
 OUTPUT_DIR=/home/users/$MLUX_USER/benchmark_$(date +%Y%m%d_%H%M%S)
 
-# Deploy and submit
+# Deploy and submit Ollama
 ./deploy_and_run.sh \
   src/recipes/ollama_meluxina.yaml \
+  meluxina \
+  $OUTPUT_DIR
+
+# Deploy and submit vLLM
+./deploy_and_run.sh \
+  src/recipes/vllm_meluxina_distributed.yaml \
   meluxina \
   $OUTPUT_DIR
 
@@ -115,73 +124,161 @@ ssh meluxina "squeue -u \$USER"
 
 ---
 
-## Step 6 — Get allocated nodes
+## Step 6 — Find executor nodes and open SSH tunnels
 
-Once job is RUNNING:
+Once job is RUNNING, find which nodes have the workload executor (port 6000):
 
 ```bash
-# Get node list
-ssh meluxina "squeue -u \$USER -o '%N' -h"
+# Get your job ID
+ssh meluxina "squeue -u \$USER -o '%i %N'"
+# Example output: 3855777 mel[2163-2164,2181-2183]
 
-# Example output: mel[2033-2035]
-# - First node (mel2033): Ollama server
-# - Second node (mel2034): Client executor ← MONITOR THIS ONE
-# - Third node (mel2035): Orchestrator
+JOBID="3855777"  # Replace with your actual job ID
 ```
 
-**Note the second node** (client) - you need it for the tunnel.
+### Quick Method: Find nodes with port 6000
+
+```bash
+# Test all nodes to find which have port 6000 (workload executor with metrics)
+# Example:
+for node in mel2163 mel2164 mel2181 mel2182 mel2183; do 
+  echo -n "$node: " 
+  ssh meluxina "srun --jobid=$JOBID -N1 -w $node --overlap ss -tulpn 2>/dev/null | grep ':6000' && echo 'EXECUTOR FOUND' || echo 'no'" 
+done
+
+# Example output:
+# mel2163: no
+# mel2164: no
+# melABCD: tcp LISTEN 0 128 0.0.0.0:6000 0.0.0.0:* users:(("python3",pid=26558,fd=3)) EXECUTOR FOUND
+# melABCD: tcp LISTEN 0 128 0.0.0.0:6000 0.0.0.0:* users:(("python3",pid=28113,fd=3)) EXECUTOR FOUND
+# mel2183: no
+```
+
+From the output above, you found **melABCD** and **melEFGH** have port 6000. Now open tunnels:
+
+```bash
+# Terminal 1
+ssh -N -L 25000:melABCD:6000 meluxina
+
+# Terminal 2 (open new terminal)
+ssh -N -L 25001:melEFGH:6000 meluxina
+```
+
+Or run both in background:
+
+```bash
+ssh -N -L 25000:mel2181:6000 meluxina &
+ssh -N -L 25001:mel2182:6000 meluxina &
+
+# Verify tunnels work
+curl -s http://localhost:25000/health
+curl -s http://localhost:25001/health
+# Expected: {"service":"ollama","status":"ok"} or {"service":"vllm","status":"ok"}
+```
+
+### Alternative: Use the automated script
+
+```bash
+# Copy script to MeluXina and run
+scp monitoring/find_executor_nodes.sh meluxina:~
+ssh meluxina ./find_executor_nodes.sh $JOBID
+
+# Copy the SSH tunnel commands from output and run them
+```
+
+**⚠️ NOTE:** Port 6000 is the workload executor where Prometheus metrics are exposed at `/metrics/prometheus`.
 
 ---
 
-## Step 7 — Open SSH tunnel to client executor
+## Step 7 — Verify tunnels and check metrics
 
-**Replace `melXXXX` with your actual client node (second node from Step 6):**
+Test that tunnels are working:
 
 ```bash
-# Open tunnel in background
-ssh -fN -L 25000:melXXXX:6000 meluxina
+# Check health endpoints
+curl -s http://localhost:25000/health
+curl -s http://localhost:25001/health
+# Expected: {"service":"ollama","status":"ok"} or {"service":"vllm","status":"ok"}
 
-# Example: ssh -fN -L 25000:mel2034:6000 meluxina
-
-# Verify tunnel works
-curl http://localhost:25000/health
-# Should return: {"service":"ollama","status":"ok"}
+# Check Prometheus metrics are available
+curl -s http://localhost:25000/metrics/prometheus | head -20
+curl -s http://localhost:25001/metrics/prometheus | head -20
+# Should see ollama_* or vllm_* metrics
 ```
 
 ---
 
 ## Step 8 — View live metrics in Grafana
 
-1. Open **http://localhost:3001** (admin/admin)
+1. Open **http://localhost:3001** (username: admin, password: admin)
 
-2. Go to **Explore** (compass icon 🧭 in left sidebar)
+2. Click **Dashboards** (left sidebar)
 
-3. Select **Prometheus** as data source
+3. Select a pre-made dashboard:
+   - **"vLLM — Workload Overview"** — for vLLM metrics
+   - **"Ollama — Workload Overview"** — for Ollama metrics
 
-4. Try these queries:
+4. Or manually explore via **Explore** (🧭 icon):
+   - Click **Prometheus** as data source
+   - Try a query like: `vllm_requests_total{job="vllm-clients"}` or `ollama_requests_total{job="ollama-clients"}`
+   - Click **Run query**
 
-### Workload Status
+5. **Enable auto-refresh**: Top-right dropdown → select **5s**
+
+**Example queries:**
+
+```promql
+# vLLM throughput
+sum(rate(vllm_requests_total[1m])) by (job)
+
+# Ollama request count
+sum(ollama_requests_total) by (instance)
+
+# Workload status (1 = running, 0 = done)
+vllm_workload_running
+
+# Request latency (vLLM)
+histogram_quantile(0.95, vllm_request_latency_seconds)
+```
+
+---
+
+## Step 9 — Check results after completion
+
+4. Puoi usare uno dei dashboard pronti (già provisionati):
+  - “vLLM — Workload Overview” (solo metriche `vllm_*`)
+  - “Ollama — Workload Overview” (solo metriche `ollama_*`)
+  - “LLM Workloads: vLLM & Ollama” (vista combinata)
+  - Nota: i pannelli con `rate(...)` mostrano 0 se non c’è traffico recente. Per carichi intermittenti usa `increase(...[5m])`.
+
+Oppure prova manualmente queste query in Explore:
+
+### vLLM
+```promql
+vllm_workload_running
+```
+```promql
+sum by (host) (vllm_requests_total)
+```
+```promql
+sum by (host) (rate(vllm_requests_total[1m]))
+```
+```promql
+sum(vllm_throughput_rps) by (host)
+```
+```promql
+avg(vllm_request_latency_seconds)
+```
+
+### Ollama (se abilitato nella ricetta)
 ```promql
 ollama_workload_running
 ```
-Shows `1` when benchmark is running, `0` when complete.
-
-### Requests & Throughput
 ```promql
-ollama_requests_total
+sum by (instance) (ollama_requests_total)
 ```
 ```promql
-ollama_throughput_rps
-```
-
-### Latency
-```promql
-ollama_request_latency_seconds
-```
-
-### Errors
-```promql
-ollama_errors_total
+sum by (instance) (rate(ollama_requests_total[1m]))
 ```
 
 5. Click **Run query** or press `Shift+Enter`
@@ -222,13 +319,15 @@ OUTPUT_DIR=/home/users/$MLUX_USER/benchmark_$(date +%Y%m%d_%H%M%S)
 ### Update tunnel for new job
 ```bash
 # Kill old tunnels
-pkill -f "ssh.*25000"
+pkill -f "ssh.*25000:.*:6000" || true
+pkill -f "ssh.*25001:.*:6000" || true
 
-# Get client node (second in list)
-ssh meluxina "squeue -u \$USER -o '%N' -h"
+# Get your job ID and node list
+ssh meluxina "squeue -u \$USER -o '%i %N' -h"
 
-# Open new tunnel (replace melXXXX)
-ssh -fN -L 25000:melXXXX:6000 meluxina
+# Find which node has port 6000 (as shown in Step 6)
+# Then open new tunnel(s) with the correct executor node(s)
+ssh -N -L 25000:mel<EXECUTOR_NODE>:6000 meluxina
 
 # Verify
 curl http://localhost:25000/health
@@ -309,13 +408,20 @@ echo $OUTPUT_DIR  # Verify it starts with /home/users/
 
 ### Prometheus target DOWN
 ```bash
-# Kill and recreate tunnel
-pkill -f "ssh.*25000"
-ssh -fN -L 25000:melXXXX:6000 meluxina
+# 1) I tunnel devono essere attivi sulle porte 25000/25001 dell'host
+lsof -nP -iTCP:25000-25001 -sTCP:LISTEN
 
-# Restart Prometheus
-cd $WORKSPACE/monitoring
-docker compose restart prometheus
+# 2) Ricrea i tunnel se necessario
+pkill -f 'ssh.*25000:.*:6000' || true
+pkill -f 'ssh.*25001:.*:6000' || true
+ssh -fN -o ExitOnForwardFailure=yes -o ServerAliveInterval=60 -L 25000:mel2102:6000 meluxina
+ssh -fN -o ExitOnForwardFailure=yes -o ServerAliveInterval=60 -L 25001:mel2147:6000 meluxina
+
+# 3) Verifica dal container che host.docker.internal sia raggiungibile
+docker exec hpc-prometheus sh -lc 'wget -qO- http://host.docker.internal:25000/health || true'
+
+# 4) Reload Prometheus (se hai modificato prometheus.yml)
+curl -X POST http://localhost:9092/-/reload
 ```
 
 ---
@@ -327,14 +433,14 @@ docker compose restart prometheus
 │                        MeluXina HPC                         │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
 │  │  mel2033    │  │  mel2034    │  │  mel2035    │         │
-│  │   Ollama    │  │   Client    │  │ Orchestrator│         │
-│  │   Server    │◄─│  Executor   │◄─│             │         │
-│  │   :11434    │  │   :6000     │  │             │         │
+│  │   vLLM/Oll. │  │  Executor 1 │  │ Executor 2 │         │
+│  │  (serving)  │◄─│   :6000     │  │   :6000     │         │
 │  └─────────────┘  └──────┬──────┘  └─────────────┘         │
 │                          │                                  │
 └──────────────────────────┼──────────────────────────────────┘
                            │ SSH Tunnel
-                           │ -L 25000:mel2034:6000
+                           │ -L 25000:mel2102:6000
+                           │ -L 25001:mel2147:6000
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                         Laptop                              │
@@ -343,7 +449,7 @@ docker compose restart prometheus
 │  │   :9092     │scrape │   :3001     │                     │
 │  └──────┬──────┘       └─────────────┘                     │
 │         │                                                   │
-│         ▼ scrapes localhost:25000/metrics/prometheus        │
+│         ▼ scrapes host.docker.internal:25000/metrics/prom.  │
 │  ┌─────────────┐                                           │
 │  │   Docker    │                                           │
 │  │   Network   │                                           │
@@ -373,11 +479,12 @@ OUTPUT_DIR=/home/users/$MLUX_USER/benchmark_$(date +%Y%m%d_%H%M%S)
 ssh meluxina "squeue -u \$USER"
 # Output: mel[2033-2035] → client is mel2034
 
-# 5. Open tunnel
-ssh -fN -L 25000:mel2034:6000 meluxina
+# 5. Open tunnels
+ssh -fN -o ExitOnForwardFailure=yes -o ServerAliveInterval=60 -L 25000:mel2102:6000 meluxina
+ssh -fN -o ExitOnForwardFailure=yes -o ServerAliveInterval=60 -L 25001:mel2147:6000 meluxina
 
 # 6. Open Grafana
 open http://localhost:3001
 # Login: admin/admin
-# Explore → Prometheus → ollama_requests_total → Run query
-```
+# Apri il dashboard: "LLM Workloads: vLLM & Ollama"
+# In Explore prova: vllm_requests_total, sum by (host) (rate(vllm_requests_total[1m]))
