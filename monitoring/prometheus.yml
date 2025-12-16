@@ -63,16 +63,13 @@ scrape_configs:
   # Usually not possible in HPC due to firewall
   # - job_name: 'hpc-nodes-direct'
 
-  # Scrape vLLM workload executors
-  # Uses the same port mapping as Ollama; keep separate job name for dashboard distinction
+  # Scrape vLLM workload executors on separate ports
   - job_name: 'vllm-clients'
     metrics_path: '/metrics/prometheus'
     static_configs:
       - targets:
-        - 'host.docker.internal:25000'  # Primary executor node
-        - 'host.docker.internal:25001'  # Secondary executor node
-        - 'host.docker.internal:25002'  # Additional nodes
-        - 'host.docker.internal:25003'
+        - 'host.docker.internal:25002'  
+        - 'host.docker.internal:25003'  
     scrape_interval: 5s
     scrape_timeout: 5s
 
