@@ -225,6 +225,8 @@ curl -s http://localhost:25001/metrics/prometheus | head -20
 
 5. **Enable auto-refresh**: Top-right dropdown → select **5s**
 
+**Important Note:** During workload execution, only `vllm_workload_running` or `ollama_workload_running` will show live updates (value=1). Other metrics like `requests_total`, `throughput_rps`, and `latency` are calculated and published **only after the workload completes**, parameter set at 5 min. This is why you'll see constant lines (flat values) in Grafana - they represent the final aggregated metrics.
+
 **Example queries:**
 
 ```promql
@@ -239,70 +241,6 @@ vllm_workload_running
 
 # Request latency (vLLM)
 histogram_quantile(0.95, vllm_request_latency_seconds)
-```
-
----
-
-## Step 9 — Check results after completion
-
-4. Puoi usare uno dei dashboard pronti (già provisionati):
-  - “vLLM — Workload Overview” (solo metriche `vllm_*`)
-  - “Ollama — Workload Overview” (solo metriche `ollama_*`)
-  - “LLM Workloads: vLLM & Ollama” (vista combinata)
-  - Nota: i pannelli con `rate(...)` mostrano 0 se non c’è traffico recente. Per carichi intermittenti usa `increase(...[5m])`.
-
-Oppure prova manualmente queste query in Explore:
-
-### vLLM
-```promql
-vllm_workload_running
-```
-```promql
-sum by (host) (vllm_requests_total)
-```
-```promql
-sum by (host) (rate(vllm_requests_total[1m]))
-```
-```promql
-sum(vllm_throughput_rps) by (host)
-```
-```promql
-avg(vllm_request_latency_seconds)
-```
-
-### Ollama (se abilitato nella ricetta)
-```promql
-ollama_workload_running
-```
-```promql
-sum by (instance) (ollama_requests_total)
-```
-```promql
-sum by (instance) (rate(ollama_requests_total[1m]))
-```
-
-5. Click **Run query** or press `Shift+Enter`
-
-6. Enable **auto-refresh** (top right dropdown → 5s) to see live updates
-
----
-
-## Step 10 — Check results after completion
-
-```bash
-ssh meluxina
-
-# List your benchmark directories
-ls -la ~/benchmark_*
-
-# Navigate to latest output directory
-cd ~/benchmark_*/experiments/*/
-
-# View aggregated logs
-cat stdout.log
-
-# View orchestrator summary
-tail -50 orchestrator.log
 ```
 
 ---
@@ -432,15 +370,15 @@ curl -X POST http://localhost:9092/-/reload
 ┌─────────────────────────────────────────────────────────────┐
 │                        MeluXina HPC                         │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │  mel2033    │  │  mel2034    │  │  mel2035    │         │
+│  │  mel_node1  │  │  mel_node2  │  │  mel_node3  │         │
 │  │   vLLM/Oll. │  │  Executor 1 │  │ Executor 2 │         │
 │  │  (serving)  │◄─│   :6000     │  │   :6000     │         │
 │  └─────────────┘  └──────┬──────┘  └─────────────┘         │
 │                          │                                  │
 └──────────────────────────┼──────────────────────────────────┘
                            │ SSH Tunnel
-                           │ -L 25000:mel2102:6000
-                           │ -L 25001:mel2147:6000
+                           │ -L 25000:mel_node4:6000
+                           │ -L 25001:mel_node5:6000
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                         Laptop                              │
