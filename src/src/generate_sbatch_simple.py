@@ -117,6 +117,9 @@ echo "Ray cluster should be ready!"
 cat > $OUTPUT_DIR/start_vllm.sh << 'VLLMSCRIPT'
 #!/bin/bash
 export RAY_ADDRESS=$1
+# Use local cache per node to avoid SQLite locking issues
+export OUTLINES_CACHE_DIR=/tmp/outlines_cache_$$
+mkdir -p $OUTLINES_CACHE_DIR
 {server_launch_cmd}
 VLLMSCRIPT
 chmod +x $OUTPUT_DIR/start_vllm.sh
@@ -283,7 +286,9 @@ def generate_sbatch(recipe, output_path):
             f"--pipeline-parallel-size {pipeline_parallel} "
             f"--distributed-executor-backend ray "
             f"--max-model-len {max_model_len} "
-            f"--gpu-memory-utilization {gpu_memory_util}"
+            f"--gpu-memory-utilization {gpu_memory_util} "
+            f"--enforce-eager "  # Disable CUDA graphs to avoid SIGSEGV
+            f"--disable-custom-all-reduce"  # Disable custom allreduce for multi-node stability
         )
 
         service_configs["vllm"]["launch_cmd"] = vllm_distributed_cmd
@@ -349,7 +354,16 @@ BENCHMARK_DIR="$(pwd)/benchmark"
 NODES=($(scontrol show hostname $SLURM_NODELIST))
 SERVER_NODE_LIST="${{NODES[@]:0:{server_nodes}}}"
 CLIENT_NODE_LIST="${{NODES[@]:{server_nodes}:{client_nodes}}}"
-ORCH_NODE="${{NODES[-1]}}"
+SERVER_NODES_ARRAY=($SERVER_NODE_LIST)
+
+# For distributed vLLM (Ray-based), orchestrator must run on head node (has GPU)
+# For other services, use dedicated orchestrator node
+if [[ "{service_type}" == "vllm" ]]; then
+    ORCH_NODE="${{SERVER_NODES_ARRAY[0]}}"
+    echo "Using Ray head node as orchestrator: $ORCH_NODE"
+else
+    ORCH_NODE="${{NODES[-1]}}"
+fi
 
 {modules_str}
 
@@ -389,7 +403,14 @@ echo "Starting orchestrator on $ORCH_NODE..."
 # The orchestrator uses the new class-based architecture:
 # 1. Creates ServerManager (service-specific) to verify servers and prepare service
 # 2. Creates WorkloadController (service-specific) to coordinate client execution
-srun --nodes=1 --nodelist=$ORCH_NODE --ntasks=1 --cpus-per-task=1 --output=$OUTPUT_DIR/orchestrator.log \\
+# For vLLM (Ray-based), allocate 1 GPU to orchestrator since it's on head node
+if [[ "{service_type}" == "vllm" ]]; then
+    ORCH_GRES="--gres=gpu:1"
+else
+    ORCH_GRES=""
+fi
+
+srun --nodes=1 --nodelist=$ORCH_NODE --ntasks=1 --cpus-per-task=1 $ORCH_GRES --overlap --output=$OUTPUT_DIR/orchestrator.log \\
     bash -c "apptainer exec {python_image_path} bash -c \\
     'pip install pyyaml requests flask && python3 -m benchmark.orchestrator \\
         --server-nodes $ORCHESTRATOR_SERVER_NODES \\
