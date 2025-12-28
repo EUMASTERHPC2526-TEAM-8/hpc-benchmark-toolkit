@@ -1,0 +1,76 @@
+scenario: "logging-test-meluxina"
+partition: "gpu"
+account: "p200981"
+qos: "default"
+
+modules:
+  - "GCCcore/13.3.0"
+  - "Apptainer/1.3.6-GCCcore-13.3.0"
+
+orchestration:
+  mode: "slurm"
+  total_nodes: 4
+  node_allocation:
+    servers:
+      nodes: 1
+    clients:
+      nodes: 2
+    monitors:
+      nodes: 1
+  job_config:
+    time_limit: "00:15:00"
+    exclusive: true
+
+resources:
+  servers:
+    gpus: 1
+    cpus_per_task: 4
+    mem_gb: 32
+  clients:
+    gpus: 0
+    cpus_per_task: 2
+    mem_gb: 16
+
+workload:
+  component: "inference"
+  service: "ollama"
+  clients_per_node: 5
+  duration: "2m"
+  warmup: "30s"
+  model: "llama2"
+
+servers:
+  health_check:
+    enabled: true
+    timeout: 300
+    interval: 5
+    endpoint: "/api/tags"
+  service_config:
+    gpu_layers: 33
+
+# for parallel processing
+environment:
+  OLLAMA_NUM_PARALLEL: "4"  
+  OLLAMA_MAX_QUEUE: "512"   # Allow queueing
+
+logging:
+  type: "tailer"
+  create_jsonl: true
+  flush_interval: 3
+  outputs:
+    stdout: "stdout.log"
+    stderr: "stderr.log"
+    aggregated: "aggregated.jsonl"
+
+artifacts:
+  containers_dir: "/project/home/p200981/u103302/containers/"
+  service:
+    path: "ollama_latest.sif"
+    remote: "docker://ollama/ollama:latest"
+  python:
+    path: "python_3_12_3_v2.sif"
+    remote: "docker://python:3.12.3-slim"
+
+binds:
+  - "/project/home/p200981/u103302/.ollama:/root/.ollama:rw"
+  - "/project/home/p200981/u103302/scratch:/scratch:rw"
