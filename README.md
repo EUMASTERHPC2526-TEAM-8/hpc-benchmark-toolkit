@@ -1,7 +1,7 @@
 # HPC Benchmark Toolkit
 
 **Version:** 1.0
-**Last Updated:** December 2024
+**Last Updated:** December 2025
 
 A comprehensive framework for benchmarking LLM inference services (Ollama, vLLM) on HPC clusters with integrated real-time monitoring. Designed for the MeluXina HPC cluster using Slurm and Apptainer containers.
 
