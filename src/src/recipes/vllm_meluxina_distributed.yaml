@@ -77,7 +77,7 @@ servers:
     # vLLM server configuration
     max_model_len: 2048  # Maximum sequence length
     gpu_memory_utilization: 0.7  # Use 70% of GPU memory
-    enforce_eager: true  # Allow CUDA graphs for better performance
+    enforce_eager: true  # true = disable CUDA graphs for compatibility
     trust_remote_code: false
 
 artifacts:

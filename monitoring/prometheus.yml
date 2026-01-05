@@ -51,11 +51,8 @@ scrape_configs:
     metrics_path: '/metrics/prometheus'
     static_configs:
       - targets:
-        - 'host.docker.internal:25000'  # Tunnel: -L 25000:mel*:6000 (workload executor)
-        - 'host.docker.internal:25001'  # Tunnel: -L 25001:mel*:11434 (ollama server)
-        - 'host.docker.internal:25002'  # Tunnel: -L 25002:mel*:6000 (additional nodes)
-        - 'host.docker.internal:25003'  # Tunnel: -L 25003:mel*:11434 (additional nodes)
-        # Add more as needed (25004, 25005, ...)
+        - 'host.docker.internal:25000'  # Tunnel: -L 25000:mel*:6000 (ollama workload executor node 1)
+        - 'host.docker.internal:25001'  # Tunnel: -L 25001:mel*:6000 (ollama workload executor node 2)
     scrape_interval: 5s
     scrape_timeout: 5s
 
