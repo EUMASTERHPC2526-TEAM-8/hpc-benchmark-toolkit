@@ -671,16 +671,32 @@ The benchmark execution follows a structured seven-phase model:
 
 \subsubsection{Phase 3: Monitoring Setup}
 
-\begin{placeholder}{Giovanni's Section}
-Please describe the monitoring setup phase in detail:
+This phase sets up the system to track what's happening during the benchmark. It prepares both the HPC cluster and personal laptop to collect performance data:
+
+\begin{enumerate}
+    \item \textbf{Start Monitoring}: Turn on the monitor tool that will watch CPU, GPU, and memory usage
+    \item \textbf{Choose What to Track}: Decide which metrics to collect (CPU usage, GPU usage, memory, etc.)
+    \item \textbf{Connect to Pushgateway}: Set up connection to Prometheus Pushgateway (stores the data)
+    \item \textbf{Create Folders}: Make directories to save the collected data as CSV files
+    \item \textbf{Run Monitor in Background}: Start monitoring that runs continuously and takes a measurement every 1 second by default
+    \item \textbf{Check Grafana Dashboard}: Make sure the dashboard on your laptop is ready to see the data
+\end{enumerate}
+
+\textbf{Main Settings:}
 \begin{itemize}
-    \item Monitor initialization process
-    \item Prometheus integration details
-    \item Pushgateway configuration
-    \item Grafana dashboard setup
-    \item SSH tunnel requirements
+    \item \texttt{monitor\_interval}: How often to check the system (example: every 1 second)
+    \item \texttt{prometheus\_push\_interval}: How often to send data to storage (example: every 15 seconds)
+    \item \texttt{pushgateway\_url}: Where to send the data (example: \texttt{http://mel2109:9091})
+    \item \texttt{output\_file}: File name to save results (example: \texttt{benchmark\_metrics.csv})
 \end{itemize}
-\end{placeholder}
+
+\textbf{Parts of the Monitoring System:}
+\begin{itemize}
+    \item \textbf{Prometheus on Your Laptop} (port 9092): Collects data every 15 seconds from the HPC cluster
+    \item \textbf{Grafana on Your Laptop} (port 3001): Shows graphs and charts of the performance data
+    \item \textbf{Pushgateway on HPC}: A storage box that receives metrics from the cluster
+    \item \textbf{SSH Tunnels}: Secret paths that let your laptop see the HPC metrics safely
+\end{itemize}
 
 \subsubsection{Phase 4: Client Launch}
 
@@ -919,55 +935,227 @@ servers:
 \section{Monitoring System}
 % ============================================================================
 
-\begin{placeholder}{Giovanni's Section}
-Please provide comprehensive documentation of the monitoring system:
+The monitoring system watches what happens during the benchmark and shows you the results. It has two main parts: one on the HPC cluster that collects data, and one on your laptop that shows graphs of this data.
 
-\subsection{Monitoring Architecture}
+\subsection{How Monitoring Works}
+
+\textbf{Simple Overview:}
+
+\begin{enumerate}
+    \item Client computers on HPC measure CPU, GPU, and memory usage every second
+    \item These measurements are stored and sent to a storage server
+    \item Your laptop connects to the HPC cluster through a secure tunnel
+    \item Your laptop collects these measurements every 15 seconds
+    \item Your laptop shows you graphs of all this data in Grafana
+\end{enumerate}
+
+\subsection{Data Collection on HPC}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1.2cm]
+    % HPC Cluster
+    \node[container, minimum width=8cm, minimum height=4cm] (hpc) at (0, 0) {};
+    \node at (-3.5, 3.5) {\textbf{HPC Cluster}};
+    
+    % Server nodes
+    \node[server] (srv1) at (-2, 2) {AI Server 1};
+    \node[server] (srv2) at (0, 2) {AI Server 2};
+    
+    % Client nodes with executors
+    \node[client] (cli1) at (-2, 0.5) {Client 1 collects data};
+    \node[client] (cli2) at (0, 0.5) {Client 2 collects data};
+    
+    % Connections
+    \draw[arrow] (srv1) -- (cli1);
+    \draw[arrow] (srv2) -- (cli2);
+\end{tikzpicture}
+\end{figure}
+
+On the HPC cluster, each client computer has a small Python program that:
+\begin{enumerate}
+    \item Measures system performance (CPU, GPU, memory) every 1 second
+    \item Stores these measurements in memory
+    \item Provides them through a web endpoint on port 6000
+\end{enumerate}
+
+\subsection{Data Viewing on Your Laptop}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1.2cm]
+    % Laptop
+    \node[container, minimum width=8cm, minimum height=3.5cm] (laptop) at (0, 0) {};
+    \node at (-3.5, 3) {\textbf{Your Laptop}};
+    
+    % Prometheus
+    \node[component, fill=accent!20] (prom) at (-1.5, 1.5) {Data Collector};
+    
+    % Grafana
+    \node[component, fill=success!20] (graf) at (1.5, 1.5) {Dashboards};
+    
+    % Tunnel
+    \node[monitor, minimum height=0.6cm] (tunnel) at (0, 0.2) {Connection to HPC};
+    
+    % Connections
+    \draw[biarrow] (prom) -- (tunnel);
+    \draw[arrow] (prom) -- (graf) node[above, midway, font=\small] {queries};
+\end{tikzpicture}
+\end{figure}
+
+On the laptop, there are two programs:
+
+\begin{enumerate}
+    \item \textbf{Prometheus} (on port 9092): A program that collects data from HPC every 15 seconds through the secure tunnel
+    \item \textbf{Grafana} (on port 3001): A program that creates nice graphs from the collected data
+\end{enumerate}
+
+\subsection{Step-by-Step: From HPC to Your Dashboard}
+
+\textbf{Step 1: HPC Client Collects Data}
+
+On client computers on HPC, a Python monitor continuously runs:
+
+\begin{lstlisting}[style=bash]
+# Data is available here on HPC (inside the cluster)
+http://client-node:6000/metrics/prometheus
+
+# The data looks like:
+ollama_throughput_rps 578           # 578 requests per second
+ollama_workload_running 1           # 1 = workload is running
+ollama_request_latency_seconds 0.015  # Each request takes 15ms
+\end{lstlisting}
+
+\textbf{Step 2: Create a Tunnel to HPC}
+
+Since your laptop cannot directly see HPC, a secure tunnel is created:
+
+\begin{lstlisting}[style=bash]
+# Example: Create tunnel from your port 25000 to HPC client-node port 6000
+ssh -N -L 25000:client-node:6000 meluxina &
+
+# Now you can see HPC data from your laptop at:
+http://localhost:25000/metrics/prometheus
+\end{lstlisting}
+
+\textbf{Step 3: Prometheus Reads the Data}
+
+A program called Prometheus on your laptop reads from this tunnel:
+
+\begin{lstlisting}[style=bash]
+# Prometheus configuration file tells it where to look
+# It checks every 15 seconds
+scrape_configs:
+  - job_name: 'ollama'
+    static_configs:
+      - targets: ['localhost:25000', 'localhost:25001']
+\end{lstlisting}
+
+\textbf{Step 4: Grafana Shows You the Graphs}
+
+Grafana reads the stored data from Prometheus and shows nice graphs:
+
 \begin{itemize}
-    \item Overall monitoring design
-    \item Component interactions
-    \item Data flow diagrams
+    \item A number showing if the workload is running (0 means stopped, 1 means running)
+    \item A line graph showing requests per second over time
+    \item A line graph showing response time over time
+    \item Counters showing total successes and failures
 \end{itemize}
 
-\subsection{Monitor Module Implementation}
+\subsection{What the Dashboards Show}
+
+\textbf{Ollama Performance Dashboard}
+
+This shows performance of the Ollama AI model:
+
 \begin{itemize}
-    \item monitor.py implementation details
-    \item Metrics collection logic
-    \item GPU/CPU/RAM monitoring
-    \item Sampling intervals
+    \item \textbf{Is it Running?}: Shows 0 (stopped) or 1 (running)
+    \item \textbf{Total Requests}: How many AI requests have been made (goes up over time)
+    \item \textbf{Speed per Computer}: Shows requests/sec on each computer (line graph)
+    \item \textbf{Total Speed}: Shows all requests/sec combined (big number)
+    \item \textbf{Response Time}: How long each request takes (line graph in milliseconds)
+    \item \textbf{Success vs Failure}: Comparison of successful vs failed requests (bar chart)
+    \item \textbf{Error Percentage}: What percent of requests failed (line graph)
 \end{itemize}
 
-\subsection{Prometheus Integration}
-\begin{itemize}
-    \item Pushgateway setup
-    \item Metrics format
-    \item Scrape configuration
-    \item Label management
-\end{itemize}
+\textbf{vLLM Performance Dashboard}
 
-\subsection{Grafana Dashboards}
+Same metrics of the Ollama but for the vLLM AI model, with extra panels:
+
 \begin{itemize}
-    \item Dashboard design
-    \item Panel configurations
-    \item Query examples
-    \item Alert setup (if any)
+    \item \textbf{Tokens per Request}: How many words the AI generates per request
+    \item \textbf{Cache Usage}: How full the GPU cache is (as a percentage)
 \end{itemize}
 
 \subsection{SSH Tunneling for Metrics}
 \begin{itemize}
-    \item Tunnel setup process
-    \item Port forwarding configuration
-    \item Troubleshooting guide
+    \item \textbf{Ollama Dashboard}: 13 panels monitoring Ollama workload metrics
+    \begin{itemize}
+        \item Workload Status (gauge: 0=idle, 1=running)
+        \item Requests Total (counter)
+        \item Throughput by Host (timeseries)
+        \item Total Throughput (stat panel in RPS)
+        \item Request Latency (timeseries in ms)
+        \item Success vs Failed Requests (bar chart)
+        \item Error Rate Over Time (percentage)
+        \item Plus additional CPU/GPU/Memory panels
+    \end{itemize}
+    
+    \item \textbf{vLLM Dashboard}: Same layout with vLLM-specific metrics
+    \begin{itemize}
+        \item vllm\_workload\_running
+        \item vllm\_throughput\_rps
+        \item vllm\_request\_latency\_seconds
+        \item vllm\_tokens\_per\_request
+        \item vllm\_cache\_usage
+    \end{itemize}
 \end{itemize}
 
-Please include:
-\begin{itemize}
-    \item TikZ diagrams for architecture
-    \item Code snippets for key implementations
-    \item Configuration examples
-    \item Screenshots or diagram of Grafana dashboard
-\end{itemize}
-\end{placeholder}
+\textbf{Example Grafana Queries:}
+\begin{lstlisting}[style=bash]
+# Current workload status
+ollama_workload_running
+
+# Throughput aggregated across hosts
+sum(ollama_throughput_rps)
+
+# Latency p95
+histogram_quantile(0.95, ollama_request_latency_seconds)
+
+# Error rate
+100 * (sum(rate(ollama_errors_total[5m])) / sum(rate(ollama_requests_total[5m])))
+\end{lstlisting}
+
+\subsection{SSH Tunneling for Metrics Access}
+
+\begin{enumerate}
+    \item \textbf{Find client nodes from job output}:
+    \begin{lstlisting}[style=bash]
+ssh meluxina "scontrol show job JOBID | grep StdOut"
+ssh meluxina "cat /path/to/logs/*.out" | grep "Client nodes"
+    \end{lstlisting}
+    
+    \item \textbf{Open SSH tunnels}:
+    \begin{lstlisting}[style=bash]
+# Ollama clients
+ssh -N -L 25000:mel2120:6000 meluxina &
+ssh -N -L 25001:mel2148:6000 meluxina &
+
+# vLLM clients
+ssh -N -L 25002:mel2142:6000 meluxina &
+ssh -N -L 25003:mel2185:6000 meluxina &
+    \end{lstlisting}
+    
+    \item \textbf{Verify metrics endpoint}:
+    \begin{lstlisting}[style=bash]
+curl http://localhost:25000/metrics/prometheus | head -5
+    \end{lstlisting}
+    
+    \item \textbf{Access Grafana}:
+    \begin{lstlisting}[style=bash]
+open http://localhost:3001  # admin / admin
+    \end{lstlisting}
+\end{enumerate}
 
 % ============================================================================
 \section{Benchmarking Implementation}
@@ -1481,33 +1669,56 @@ This section documents the contributions of each team member to the project.
 \textbf{Role}: Monitoring
 
 \begin{placeholder}{Giovanni's Contributions}
-Please list your specific contributions:
 \begin{itemize}
-    \item \textbf{Monitor Module}
+    \item \textbf{Monitor Tool} (\texttt{src/monitor/monitor.py})
     \begin{itemize}
-        \item Implementation details of monitor.py
-        \item GPU/CPU/RAM metrics collection
-        \item CSV output generation
+        \item Built a tool that measures CPU, GPU, and memory usage
+        \item Runs in the background and checks every 1 second
+        \item Saves all measurements to a CSV file for later analysis
+        \item Works with Prometheus (data collection system) to send data to your laptop
+        \item Supports computers with multiple GPUs
     \end{itemize}
 
-    \item \textbf{Prometheus Integration}
+    \item \textbf{Prometheus Setup}
     \begin{itemize}
-        \item Pushgateway setup and configuration
-        \item Metrics format design
-        \item Prometheus client integration
+        \item Set up Prometheus Pushgateway (a storage box for metric data)
+        \item Made data format that Prometheus understands
+        \item Made it so data is sent every 15 seconds to storage
+        \item Created the configuration file (\texttt{monitoring/prometheus.yml})
+        \item Made metrics available on port 6000 on each client computer
     \end{itemize}
 
-    \item \textbf{Grafana Setup}
+    \item \textbf{Grafana Dashboards}
     \begin{itemize}
-        \item Docker Compose configuration
-        \item Dashboard design and implementation
-        \item Panel and query configuration
+        \item Docker setup for Grafana (dashboard program)
+        \item Designed and built two dashboards (one for Ollama, one for vLLM)
+        \item Each dashboard has 13 different graphs and numbers
+        \item Graphs show: requests per second, response time, success vs failure, errors
+        \item Made it so you can see data from each computer separately or all together
+        \item Made dashboards refresh automatically to show live data
+    \end{itemize}
+
+    \item \textbf{Docker Monitoring Stack}
+    \begin{itemize}
+        \item Set up Docker containers for Prometheus, Grafana, and storage
+        \item Made sure data is saved even if you restart
+        \item Made Grafana automatically load the dashboards
+        \item Created a simple script (\texttt{monitoring/start.sh}) to start everything with one command
+    \end{itemize}
+
+    \item \textbf{SSH Tunnels for Secure Connection}
+    \begin{itemize}
+        \item Wrote guides explaining how to create secure connections from your laptop to HPC
+        \item Set up port numbers (25000-25001 for Ollama, 25002-25003 for vLLM)
+        \item Made it easy to find which computers to connect to from the job logs
+        \item Wrote solutions for common connection problems
     \end{itemize}
 
     \item \textbf{Documentation}
     \begin{itemize}
-        \item QUICKSTART.md guide
-        \item Monitoring section of this report
+        \item Created \texttt{monitoring/QUICKSTART.md} with step-by-step setup guide
+        \item Wrote Phase 3 (Monitoring Setup) execution flow description
+        \item Provided comprehensive Prometheus query examples and dashboard configuration details
     \end{itemize}
 \end{itemize}
 \end{placeholder}

@@ -225,18 +225,65 @@ python3 src/benchmark/orchestrator.py \
   --workload-config-file src/src/recipes/ollama_meluxina.yaml
 ```
 
-### 4.2 Using the CLI
+### 4.2 Monitoring Metrics with CLI
 
+**Step 1: Start local monitoring stack**
 ```bash
-# List available recipes
-python3 src/benchmark_cli.py list
-
-# Create a new recipe interactively
-python3 src/benchmark_cli.py create
-
-# Deploy and run a recipe
-python3 src/benchmark_cli.py run --recipe src/src/recipes/ollama_meluxina.yaml
+cd monitoring
+./start.sh
 ```
+
+**Step 2: Deploy and run benchmark**
+```bash
+cd ../src
+python3 benchmark_cli.py run --recipe src/recipes/ollama_meluxina.yaml
+# Input: meluxina
+# Input: /mnt/tier2/users/YOUR_USERNAME/ollama-test
+# Note the Job ID from output (e.g., "Submitted batch job 3906845")
+```
+
+**Step 3: Find client nodes from job logs**
+```bash
+ssh meluxina squeue
+
+# Get log file path, replacing JOBID with the correct job id
+ssh meluxina "scontrol show job JOBID | grep StdOut"
+# Output example: StdOut=/mnt/tier2/users/u103217/ollama-meluxina-test/logs/ollama-meluxina-test_20260105_170946_3907776.out
+
+# Estraggo automaticamente il path completo
+LOG_PATH=$(ssh meluxina "scontrol show job 3907986 | grep StdOut | awk -F'=' '{print $2}'")
+
+# Find client nodes using the FULL log path from above (they run the metrics endpoint on port 6000)
+ssh meluxina "cat $LOG_PATH" | grep "Client nodes"
+# Output example: Client nodes: mel2120 mel2148
+```
+
+**Step 4: Open SSH tunnels to client nodes**
+```bash
+# For Ollama (ports 25000-25001)
+ssh -N -L 25000:mel21xx:6000 meluxina &
+ssh -N -L 25001:mel21yy:6000 meluxina &
+
+# For vLLM (ports 25002-25003)
+# ssh -N -L 25002:melXXXX:6000 meluxina &
+# ssh -N -L 25003:melYYYY:6000 meluxina &
+
+# Verify metrics endpoint
+curl http://localhost:25000/metrics/prometheus | head -5
+```
+
+**Step 5: View metrics in Grafana**
+```bash
+open http://localhost:3001
+# Login: admin / admin
+# Navigate to: Dashboards → "Ollama — Workload Overview" or "vLLM — Workload Overview"
+```
+
+**Important:**
+- Metrics are **published only when the job completes**
+- During execution: `workload_running=1` gauge is visible
+- After completion: Refresh Grafana to see throughput, latency, requests
+- Keep SSH tunnels open until job finishes
 
 ### 4.3 Quick Benchmark with Monitoring
 
