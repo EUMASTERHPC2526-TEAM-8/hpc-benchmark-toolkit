@@ -1,0 +1,887 @@
+\documentclass[aspectratio=169]{beamer}
+
+% Theme and colors
+\usetheme{Madrid}
+\usecolortheme{default}
+
+% Custom colors matching the report
+\definecolor{primary}{RGB}{41, 128, 185}
+\definecolor{secondary}{RGB}{52, 73, 94}
+\definecolor{accent}{RGB}{231, 76, 60}
+\definecolor{success}{RGB}{39, 174, 96}
+\definecolor{warning}{RGB}{241, 196, 15}
+\definecolor{codebackground}{RGB}{248, 248, 248}
+\definecolor{codeborder}{RGB}{200, 200, 200}
+\definecolor{lightgray}{RGB}{245, 245, 245}
+
+\setbeamercolor{palette primary}{bg=primary,fg=white}
+\setbeamercolor{palette secondary}{bg=secondary,fg=white}
+\setbeamercolor{palette tertiary}{bg=primary,fg=white}
+\setbeamercolor{structure}{fg=primary}
+\setbeamercolor{title}{fg=primary}
+\setbeamercolor{frametitle}{fg=primary}
+\setbeamercolor{block title}{bg=primary,fg=white}
+\setbeamercolor{block body}{bg=primary!10}
+\setbeamercolor{item}{fg=primary}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc, fit, backgrounds, decorations.pathreplacing, shadows.blur}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{xcolor}
+
+% TikZ styles matching the report
+\tikzset{
+    component/.style={rectangle, rounded corners=4pt, minimum width=3cm, minimum height=1cm, align=center, draw=primary, fill=primary!10, font=\small},
+    server/.style={rectangle, rounded corners=4pt, minimum width=2.5cm, minimum height=0.8cm, align=center, draw=success, fill=success!10, font=\small},
+    client/.style={rectangle, rounded corners=4pt, minimum width=2.5cm, minimum height=0.8cm, align=center, draw=accent, fill=accent!10, font=\small},
+    monitor/.style={rectangle, rounded corners=4pt, minimum width=2.5cm, minimum height=0.8cm, align=center, draw=warning, fill=warning!10, font=\small},
+    arrow/.style={thick,->,>=Stealth,primary},
+    biarrow/.style={thick,<->,>=Stealth,primary},
+    dashedarrow/.style={thick,->,>=Stealth,dashed,secondary},
+    container/.style={rectangle, draw=secondary, dashed, inner sep=10pt, rounded corners=6pt}
+}
+
+% Code listing style
+\lstdefinestyle{code}{
+    backgroundcolor=\color{codebackground},
+    basicstyle=\ttfamily\scriptsize,
+    breaklines=true,
+    frame=single,
+    rulecolor=\color{codeborder},
+    xleftmargin=2pt,
+    xrightmargin=2pt,
+    framexleftmargin=2pt,
+    columns=fullflexible,
+}
+
+\lstdefinestyle{yaml}{
+    style=code,
+    commentstyle=\color{gray},
+    keywordstyle=\color{primary}\bfseries,
+    stringstyle=\color{success},
+}
+
+\lstdefinestyle{bash}{
+    style=code,
+    commentstyle=\color{gray},
+    keywordstyle=\color{primary}\bfseries,
+    language=bash,
+}
+
+% Simple placeholder environment using beamer blocks
+\newenvironment{placeholder}[1][]{%
+    \setbeamercolor{block title}{bg=orange!80!black,fg=white}%
+    \setbeamercolor{block body}{bg=yellow!20}%
+    \begin{block}{PLACEHOLDER: #1}%
+}{%
+    \end{block}%
+}
+
+% Title information
+\title[HPC Benchmark Toolkit]{HPC Benchmark Toolkit}
+\subtitle{A Comprehensive Framework for Benchmarking LLM Inference Services on HPC Clusters}
+\author{Alberto Finardi \and Giovanni \and Laura \and Giulia}
+\institute{MeluXina HPC Cluster}
+\date{December 2024}
+
+\begin{document}
+
+% ============================================================================
+% Title Slide
+% ============================================================================
+\begin{frame}
+    \titlepage
+\end{frame}
+
+% ============================================================================
+% Outline
+% ============================================================================
+\begin{frame}{Outline}
+    \tableofcontents
+\end{frame}
+
+% ============================================================================
+\section{Introduction}
+% ============================================================================
+
+\begin{frame}{Project Overview}
+    \begin{center}
+    \begin{tikzpicture}
+        % Main box
+        \node[component, minimum width=12cm, minimum height=1.5cm, fill=primary!20] at (0, 2.5) {
+            \textbf{\Large Production-Ready LLM Benchmarking Framework}
+        };
+
+        % Four key features in a row
+        \node[component, text width=2.6cm, minimum height=2cm, fill=primary!10] at (-4.5, 0) {
+            \textbf{Reproducible}\\[4pt]
+            {\scriptsize YAML-based\\configuration}
+        };
+        \node[component, text width=2.6cm, minimum height=2cm, fill=success!10, draw=success] at (-1.5, 0) {
+            \textbf{Scalable}\\[4pt]
+            {\scriptsize Single to\\multi-node}
+        };
+        \node[component, text width=2.6cm, minimum height=2cm, fill=warning!10, draw=warning] at (1.5, 0) {
+            \textbf{Observable}\\[4pt]
+            {\scriptsize Real-time\\monitoring}
+        };
+        \node[component, text width=2.6cm, minimum height=2cm, fill=accent!10, draw=accent] at (4.5, 0) {
+            \textbf{HPC-Native}\\[4pt]
+            {\scriptsize Slurm +\\Apptainer}
+        };
+
+        % Platform info
+        \node[component, minimum width=12cm, minimum height=0.9cm, fill=secondary!10, draw=secondary] at (0, -2) {
+            \textbf{Target:} MeluXina HPC Cluster
+        };
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Supported Services}
+    \begin{center}
+    \begin{tikzpicture}[node distance=1.2cm]
+        % Service boxes
+        \node[server, minimum width=3.5cm, minimum height=1.2cm] (ollama) at (-4.5, 0) {
+            \textbf{Ollama}\\[-2pt]
+            {\tiny Port 11434 | REST API}
+        };
+        \node[server, minimum width=3.5cm, minimum height=1.2cm] (vllm) at (0, 0) {
+            \textbf{vLLM}\\[-2pt]
+            {\tiny Port 8000 | OpenAI API}
+        };
+        \node[server, minimum width=3.5cm, minimum height=1.2cm] (vllmd) at (4.5, 0) {
+            \textbf{vLLM Distributed}\\[-2pt]
+            {\tiny Multi-node with Ray}
+        };
+
+        % Features below
+        \node[below=0.3cm of ollama, font=\scriptsize, text=secondary] {Local LLM inference};
+        \node[below=0.3cm of vllm, font=\scriptsize, text=secondary] {High-throughput serving};
+        \node[below=0.3cm of vllmd, font=\scriptsize, text=secondary] {Tensor parallelism};
+    \end{tikzpicture}
+    \end{center}
+
+    \vspace{0.5cm}
+
+    \begin{center}
+    \begin{tikzpicture}
+        \node[component, minimum width=14cm, minimum height=0.8cm, fill=primary!5] {
+            \textbf{Key Features:} Recipe-driven configuration \textbullet{} Real-time monitoring \textbullet{} Comprehensive metrics (p50/p90/p99)
+        };
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+% ============================================================================
+\section{How It Works}
+% ============================================================================
+
+\begin{frame}{High-Level Architecture}
+    \begin{center}
+    \begin{tikzpicture}[node distance=1cm]
+        % User layer
+        \node[component, minimum width=11cm, fill=lightgray, draw=secondary] (user) at (0, 4.5) {\textbf{User Interface Layer}};
+
+        % Interface components
+        \node[component, minimum width=3cm] (cli) at (-3.5, 3) {CLI};
+        \node[component, minimum width=3cm] (recipe) at (0, 3) {Recipe Parser};
+        \node[component, minimum width=3cm] (validator) at (3.5, 3) {Validator};
+
+        % Orchestrator
+        \node[component, minimum width=11cm, minimum height=1.1cm, fill=primary!25, draw=primary] (orch) at (0, 1.5) {\textbf{Orchestrator}};
+
+        % Core modules
+        \node[server, minimum width=3cm] (servers) at (-3.5, 0) {Server Module};
+        \node[client, minimum width=3cm] (clients) at (0, 0) {Client Module};
+        \node[monitor, minimum width=3cm] (monitors) at (3.5, 0) {Monitor Module};
+
+        % Service Factory
+        \node[component, minimum width=11cm, fill=secondary!15, draw=secondary] (factory) at (0, -1.5) {\textbf{Service Factory + Registry}};
+
+        % Cluster layer
+        \node[container, minimum width=11cm, minimum height=0.9cm, fill=gray!5] (cluster) at (0, -3) {\textbf{HPC Cluster} (Slurm + Apptainer)};
+
+        % Arrows
+        \draw[arrow] (user.south -| cli) -- (cli);
+        \draw[arrow] (user.south -| recipe) -- (recipe);
+        \draw[arrow] (user.south -| validator) -- (validator);
+        \draw[arrow] (cli) -- (cli |- orch.north);
+        \draw[arrow] (recipe) -- (recipe |- orch.north);
+        \draw[arrow] (validator) -- (validator |- orch.north);
+        \draw[arrow] (orch.south -| servers) -- (servers);
+        \draw[arrow] (orch.south -| clients) -- (clients);
+        \draw[arrow] (orch.south -| monitors) -- (monitors);
+        \draw[arrow] (servers) -- (servers |- factory.north);
+        \draw[arrow] (clients) -- (clients |- factory.north);
+        \draw[arrow] (monitors) -- (monitors |- factory.north);
+        \draw[dashedarrow] (factory) -- (cluster);
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Seven-Phase Execution Model}
+    \begin{center}
+    \begin{tikzpicture}[node distance=1cm]
+        % Phase boxes with gradient-like effect
+        \node[component, minimum width=10cm, minimum height=0.9cm, fill=primary!15] (p1) at (0, 4.5) {\textbf{1. Initialization} -- Parse recipe, validate configuration};
+        \node[component, minimum width=10cm, minimum height=0.9cm, fill=success!15, draw=success] (p2) at (0, 3.4) {\textbf{2. Service Deployment} -- Start containers, health checks};
+        \node[component, minimum width=10cm, minimum height=0.9cm, fill=warning!15, draw=warning] (p3) at (0, 2.3) {\textbf{3. Monitoring Setup} -- Initialize metrics collection};
+        \node[component, minimum width=10cm, minimum height=0.9cm, fill=accent!15, draw=accent] (p4) at (0, 1.2) {\textbf{4. Client Launch} -- Deploy executors on client nodes};
+        \node[component, minimum width=10cm, minimum height=0.9cm, fill=primary!25] (p5) at (0, 0.1) {\textbf{5. Execution} -- Run benchmark, collect metrics};
+        \node[component, minimum width=10cm, minimum height=0.9cm, fill=secondary!15, draw=secondary] (p6) at (0, -1.0) {\textbf{6. Teardown} -- Stop clients, services, monitoring};
+        \node[component, minimum width=10cm, minimum height=0.9cm, fill=gray!15, draw=gray] (p7) at (0, -2.1) {\textbf{7. Report Generation} -- Aggregate results, generate reports};
+
+        % Arrows between phases
+        \draw[arrow, primary!70] (p1.south) -- (p2.north);
+        \draw[arrow, success!70] (p2.south) -- (p3.north);
+        \draw[arrow, warning!70] (p3.south) -- (p4.north);
+        \draw[arrow, accent!70] (p4.south) -- (p5.north);
+        \draw[arrow, primary!70] (p5.south) -- (p6.north);
+        \draw[arrow, secondary!70] (p6.south) -- (p7.north);
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Control Plane Communication}
+    \begin{center}
+    \begin{tikzpicture}[node distance=1cm]
+        % Orchestrator
+        \node[component, minimum width=4cm, minimum height=1.4cm, fill=primary!20] (orch) at (0, 3.5) {\textbf{Orchestrator}};
+
+        % Server Manager
+        \node[server, minimum width=3cm, minimum height=1cm] (sm) at (-4, 1.5) {\textbf{Server Manager}};
+
+        % Workload Controller
+        \node[client, minimum width=3cm, minimum height=1cm] (wc) at (4, 1.5) {\textbf{Workload Controller}};
+
+        % Server nodes
+        \node[server, minimum width=2.2cm, minimum height=0.9cm, font=\scriptsize] (s1) at (-5, -0.5) {Server 1};
+        \node[server, minimum width=2.2cm, minimum height=0.9cm, font=\scriptsize] (s2) at (-3, -0.5) {Server 2};
+
+        % Client executors
+        \node[client, minimum width=2.2cm, minimum height=0.9cm, font=\scriptsize] (e1) at (3, -0.5) {Executor 1};
+        \node[client, minimum width=2.2cm, minimum height=0.9cm, font=\scriptsize] (e2) at (5, -0.5) {Executor 2};
+
+        % Protocol labels with boxes
+        \node[fill=white, draw=primary!30, rounded corners=2pt, font=\tiny\ttfamily, inner sep=2pt] at (-2, 2.5) {Python API};
+        \node[fill=white, draw=primary!30, rounded corners=2pt, font=\tiny\ttfamily, inner sep=2pt] at (2, 2.5) {Python API};
+        \node[fill=white, draw=success!30, rounded corners=2pt, font=\tiny\ttfamily, inner sep=2pt] at (-4, 0.5) {HTTP};
+        \node[fill=white, draw=accent!30, rounded corners=2pt, font=\tiny\ttfamily, inner sep=2pt] at (4, 0.5) {HTTP};
+
+        % Arrows
+        \draw[arrow] (orch) -- (sm);
+        \draw[arrow] (orch) -- (wc);
+        \draw[arrow, success] (sm) -- (s1);
+        \draw[arrow, success] (sm) -- (s2);
+        \draw[arrow, accent] (wc) -- (e1);
+        \draw[arrow, accent] (wc) -- (e2);
+    \end{tikzpicture}
+    \end{center}
+
+    \vspace{0.2cm}
+    \begin{center}
+    \begin{tikzpicture}
+        \node[component, minimum width=13cm, minimum height=0.7cm, fill=accent!10, draw=accent, font=\small] {
+            \textbf{Executor REST API:} \texttt{GET /health} \textbullet{} \texttt{POST /start} \textbullet{} \texttt{GET /status} \textbullet{} \texttt{GET /metrics} \textbullet{} \texttt{POST /stop}
+        };
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Design Patterns}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{center}
+            \textbf{\textcolor{primary}{Factory Pattern}}
+            \end{center}
+            \vspace{0.2cm}
+            \begin{center}
+            \begin{tikzpicture}[]
+                \node[component, minimum width=4cm, minimum height=1.2cm, fill=primary!20] (factory) at (0, 2) {\textbf{ServiceFactory}};
+                \node[server, minimum width=2.8cm] (ollama) at (-2, 0) {OllamaManager};
+                \node[server, minimum width=2.8cm] (vllm) at (2, 0) {VllmManager};
+                \node[client, minimum width=2.8cm] (exec) at (0, -1.2) {Executors};
+                \draw[arrow] (factory) -- (ollama);
+                \draw[arrow] (factory) -- (vllm);
+                \draw[arrow] (factory) -- (exec);
+            \end{tikzpicture}
+            \end{center}
+            \vspace{0.2cm}
+            {\small
+            \begin{itemize}
+                \item Dynamic instantiation
+                \item Runtime service registration
+                \item Extensible architecture
+            \end{itemize}
+            }
+        \end{column}
+
+        \begin{column}{0.48\textwidth}
+            \begin{center}
+            \textbf{\textcolor{primary}{Template Method Pattern}}
+            \end{center}
+            \vspace{0.2cm}
+            \begin{center}
+            \begin{tikzpicture}[]
+                \node[component, minimum width=4cm, minimum height=1.2cm, fill=secondary!15, draw=secondary] (base) at (0, 2) {\textbf{BaseServerManager}};
+                \node[server, minimum width=2.8cm] (ollama) at (-2, 0) {OllamaServer};
+                \node[server, minimum width=2.8cm] (vllm) at (2, 0) {VllmServer};
+                % Inheritance arrows (hollow)
+                \draw[thick, -{Triangle[open, length=8pt, width=6pt]}, secondary] (ollama.north) -- (base.south -| ollama);
+                \draw[thick, -{Triangle[open, length=8pt, width=6pt]}, secondary] (vllm.north) -- (base.south -| vllm);
+            \end{tikzpicture}
+            \end{center}
+            \vspace{0.2cm}
+            {\small
+            \begin{itemize}
+                \item Abstract base classes
+                \item Service-specific implementations
+                \item Consistent interfaces
+            \end{itemize}
+            }
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% ============================================================================
+\section{Infrastructure}
+% ============================================================================
+
+\begin{frame}{Recipe Configuration System}
+    \begin{center}
+    \begin{tikzpicture}
+        % Title box
+        \node[component, minimum width=13cm, minimum height=0.9cm, fill=primary!20] at (0, 3) {
+            \textbf{YAML-Based Configuration for Reproducible Experiments}
+        };
+
+        % Three key aspects
+        \node[component, text width=3.8cm, minimum height=2.5cm, fill=success!10, draw=success] at (-4.5, 0.5) {
+            \textbf{Orchestration}\\[6pt]
+            {\scriptsize Slurm mode\\
+            Node allocation\\
+            Resource requests}
+        };
+
+        \node[component, text width=3.8cm, minimum height=2.5cm, fill=warning!10, draw=warning] at (0, 0.5) {
+            \textbf{Workload}\\[6pt]
+            {\scriptsize Service selection\\
+            Duration \& warmup\\
+            Model \& parameters}
+        };
+
+        \node[component, text width=3.8cm, minimum height=2.5cm, fill=accent!10, draw=accent] at (4.5, 0.5) {
+            \textbf{Parameter Sweeps}\\[6pt]
+            {\scriptsize Batch sizes\\
+            Concurrency levels\\
+            Automated trials}
+        };
+
+        % Bottom feature
+        \node[component, minimum width=13cm, minimum height=0.8cm, fill=secondary!10, draw=secondary] at (0, -2) {
+            \textbf{Features:} JSON Schema validation \textbullet{} Service-specific configs \textbullet{} Automated experiment generation
+        };
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Recipe Validation}
+    \begin{placeholder}{Laura's Section}
+        \begin{itemize}
+            \item JSON Schema validation implementation
+            \item Validation rules and error messages
+            \item Custom validators for service-specific configs
+            \item Schema versioning support
+            \item Interactive validation mode
+        \end{itemize}
+    \end{placeholder}
+\end{frame}
+
+\begin{frame}{Slurm Integration}
+    \begin{center}
+    \begin{tikzpicture}
+        % Slurm job boundary
+        \node[container, minimum width=12cm, minimum height=5cm, fill=gray!5] (job) at (0, 0) {};
+        \node[above, font=\large\bfseries, text=primary] at (0, 2.6) {Automated SBATCH Script Generation};
+
+        % Server nodes
+        \node[server, text width=2.3cm, minimum height=1.3cm] (s1) at (-4, 0.8) {
+            \textbf{Server 1}\\
+            {\scriptsize 2 GPUs}
+        };
+        \node[server, text width=2.3cm, minimum height=1.3cm] (s2) at (-4, -0.8) {
+            \textbf{Server 2}\\
+            {\scriptsize 2 GPUs}
+        };
+
+        % Client nodes
+        \node[client, text width=2.3cm, minimum height=1.3cm] (c1) at (-0.5, 0.8) {
+            \textbf{Client 1}\\
+            {\scriptsize CPU only}
+        };
+        \node[client, text width=2.3cm, minimum height=1.3cm] (c2) at (-0.5, -0.8) {
+            \textbf{Client 2}\\
+            {\scriptsize CPU only}
+        };
+
+        % Monitor node
+        \node[monitor, text width=2.3cm, minimum height=1.3cm] (m1) at (3, 0) {
+            \textbf{Monitor}\\
+            {\scriptsize Metrics}
+        };
+
+        % Orchestrator indicator
+        \node[component, minimum width=12cm, minimum height=0.7cm, fill=secondary!15, draw=secondary] at (0, -3) {
+            \textbf{Orchestrator:} Dynamic node allocation \textbullet{} Automatic GPU binding \textbullet{} Health checks
+        };
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Distributed vLLM with Ray}
+    \begin{center}
+    \begin{tikzpicture}[node distance=1cm]
+        % Title
+        \node[font=\bfseries, text=primary] at (0, 3.5) {Tensor Parallel Size: 6 GPUs across 3 Nodes};
+
+        % Ray cluster boundary
+        \node[container, minimum width=12cm, minimum height=5.5cm, fill=success!5] (cluster) at (0, 0) {};
+
+        % Ray Head Node
+        \node[server, minimum width=4cm, minimum height=2.2cm] (head) at (-3.5, 0.5) {
+            \textbf{Ray Head Node}\\[2pt]
+            {\scriptsize Ray: 6379}\\
+            {\scriptsize Dashboard: 8265}\\
+            {\scriptsize vLLM API: 8000}
+        };
+
+        % Ray Worker Nodes
+        \node[server, minimum width=3.5cm, minimum height=1.8cm] (w1) at (2.5, 1.2) {
+            \textbf{Ray Worker 1}\\[2pt]
+            {\scriptsize Object Mgr: 8076}\\
+            {\scriptsize Node Mgr: 8077}
+        };
+
+        \node[server, minimum width=3.5cm, minimum height=1.8cm] (w2) at (2.5, -1.2) {
+            \textbf{Ray Worker 2}\\[2pt]
+            {\scriptsize Object Mgr: 8076}\\
+            {\scriptsize Node Mgr: 8077}
+        };
+
+        % GPU icons
+        \node[draw, fill=success!40, rounded corners=2pt, minimum width=0.8cm, font=\tiny\bfseries] at (-4.5, -0.8) {GPU};
+        \node[draw, fill=success!40, rounded corners=2pt, minimum width=0.8cm, font=\tiny\bfseries] at (-3.5, -0.8) {GPU};
+        \node[draw, fill=success!40, rounded corners=2pt, minimum width=0.8cm, font=\tiny\bfseries] at (1.7, 0.2) {GPU};
+        \node[draw, fill=success!40, rounded corners=2pt, minimum width=0.8cm, font=\tiny\bfseries] at (2.7, 0.2) {GPU};
+        \node[draw, fill=success!40, rounded corners=2pt, minimum width=0.8cm, font=\tiny\bfseries] at (1.7, -2.2) {GPU};
+        \node[draw, fill=success!40, rounded corners=2pt, minimum width=0.8cm, font=\tiny\bfseries] at (2.7, -2.2) {GPU};
+
+        % Connections
+        \draw[biarrow, thick, success] (head.east) -- node[above, font=\scriptsize, fill=white, inner sep=2pt] {Ray Protocol} (w1.west);
+        \draw[biarrow, thick, success] (head.east) -- node[below, font=\scriptsize, fill=white, inner sep=2pt] {Ray Protocol} (w2.west);
+
+        % Client requests
+        \node[client, minimum width=2cm] (client) at (-3.5, -3) {Benchmark Clients};
+        \draw[arrow, accent, thick] (client) -- node[left, font=\scriptsize] {HTTP :8000} (head);
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Metrics Collection Pipeline}
+    \begin{center}
+    \begin{tikzpicture}[node distance=1cm]
+        % HPC Cluster boundary
+        \node[container, minimum width=10cm, minimum height=3cm, fill=success!5] (hpc) at (0, 2.5) {};
+        \node[above, font=\bfseries, text=success] at (0, 4.1) {MeluXina HPC Cluster};
+
+        % Executors
+        \node[client, minimum width=2.2cm, font=\scriptsize] (e1) at (-3, 2.5) {Executor 1\\{\tiny :6000}};
+        \node[client, minimum width=2.2cm, font=\scriptsize] (e2) at (0, 2.5) {Executor 2\\{\tiny :6000}};
+        \node[client, minimum width=2.2cm, font=\scriptsize] (e3) at (3, 2.5) {Executor 3\\{\tiny :6000}};
+
+        % SSH Tunnel
+        \node[component, minimum width=3cm, font=\scriptsize, fill=secondary!15, draw=secondary] (tunnel) at (0, 0.3) {SSH Tunnel\\{\tiny Ports 25000-25002}};
+
+        % Laptop boundary
+        \node[container, minimum width=10cm, minimum height=2.5cm, fill=primary!5] (laptop) at (0, -2.5) {};
+        \node[above, font=\bfseries, text=primary] at (0, -1.2) {Local Machine};
+
+        % Prometheus & Grafana
+        \node[monitor, minimum width=2.5cm, font=\scriptsize] (prom) at (-2, -2.8) {Prometheus\\{\tiny :9092}};
+        \node[monitor, minimum width=2.5cm, font=\scriptsize] (grafana) at (2, -2.8) {Grafana\\{\tiny :3001}};
+
+        % Arrows
+        \draw[arrow, accent] (e1.south) -- (tunnel.north -| e1);
+        \draw[arrow, accent] (e2.south) -- (tunnel.north);
+        \draw[arrow, accent] (e3.south) -- (tunnel.north -| e3);
+        \draw[arrow, secondary] (tunnel.south) -- (prom.north -| tunnel);
+        \draw[arrow, warning] (prom) -- node[above, font=\scriptsize] {scrape} (grafana);
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+% ============================================================================
+\section{Monitoring System}
+% ============================================================================
+
+\begin{frame}{Monitoring Architecture}
+    \begin{center}
+    \begin{tikzpicture}
+        % Title
+        \node[monitor, minimum width=12cm, minimum height=0.9cm] at (0, 3.2) {
+            \textbf{Real-Time Metrics Collection \& Visualization}
+        };
+
+        % Data flow boxes
+        \node[client, minimum width=3.5cm, minimum height=1.5cm] at (-4, 1.2) {
+            \textbf{Executors}\\[4pt]
+            {\scriptsize Collect metrics\\
+            CPU/GPU/Memory\\
+            1s interval}
+        };
+
+        \node[component, minimum width=3.5cm, minimum height=1.5cm, fill=secondary!15, draw=secondary] at (0, 1.2) {
+            \textbf{SSH Tunnel}\\[4pt]
+            {\scriptsize HPC to Local\\
+            Port forwarding\\
+            Secure transport}
+        };
+
+        \node[monitor, minimum width=3.5cm, minimum height=1.5cm] at (4, 1.2) {
+            \textbf{Prometheus}\\[4pt]
+            {\scriptsize Scrape every 15s\\
+            Time-series DB\\
+            Query engine}
+        };
+
+        \node[monitor, minimum width=8cm, minimum height=1.5cm] at (0, -0.8) {
+            \textbf{Grafana Dashboards}\\[4pt]
+            {\scriptsize Throughput \textbullet{} Latency (p50/p90/p99) \textbullet{} Error rates\\
+            CPU/GPU utilization \textbullet{} Memory usage}
+        };
+
+        % Arrows
+        \draw[arrow, accent, thick] (-4, 0.4) -- (0, 0.4);
+        \draw[arrow, warning, thick] (0, 0.4) -- (4, 0.4);
+        \draw[arrow, warning, thick] (4, 0.4) -- (4, -0.1) -- (0, -0.1);
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+% ============================================================================
+\section{Benchmarking}
+% ============================================================================
+
+\begin{frame}{Benchmarking Implementation}
+    \begin{placeholder}{Laura's Section}
+        \textbf{Workload Executor:} Thread pool management, request generation, latency measurement
+
+        \vspace{0.3cm}
+        \textbf{Ollama Benchmarking:} HellaSwag dataset, request format, response parsing
+
+        \vspace{0.3cm}
+        \textbf{vLLM Benchmarking:} OpenAI-compatible API, streaming, token counting
+
+        \vspace{0.3cm}
+        \textbf{Metrics:} p50/p90/p99 latency, throughput (req/s, tokens/s), error rates
+
+        \vspace{0.3cm}
+        \textbf{Load Patterns:} Constant, Poisson, Burst
+    \end{placeholder}
+\end{frame}
+
+\begin{frame}{Performance Analysis}
+    \begin{placeholder}{Laura's Benchmarking Results}
+        \textbf{Bottleneck Analysis:}
+        \begin{itemize}
+            \item Latency breakdown for LLM inference
+            \item GPU compute vs memory transfer
+            \item Network overhead measurements
+        \end{itemize}
+
+        \vspace{0.3cm}
+        \textbf{Scaling Analysis:}
+        \begin{itemize}
+            \item Single-node vs multi-node performance
+            \item Strong/weak scaling efficiency
+        \end{itemize}
+
+        \vspace{0.3cm}
+        \textit{Include benchmark charts and graphs here}
+    \end{placeholder}
+\end{frame}
+
+% ============================================================================
+\section{Logging System}
+% ============================================================================
+
+\begin{frame}{Logging Architecture}
+    \begin{placeholder}{Giulia's Section}
+        \textbf{Overall Design:}
+        \begin{itemize}
+            \item Log sources and destinations
+            \item Aggregation strategy for distributed logs
+        \end{itemize}
+
+        \vspace{0.3cm}
+        \textbf{BaseLogCollector:}
+        \begin{itemize}
+            \item Abstract interface design
+            \item LogSource dataclass
+        \end{itemize}
+
+        \vspace{0.3cm}
+        \textbf{TailerLogCollector:}
+        \begin{itemize}
+            \item File tailing implementation
+            \item Remote node log collection
+        \end{itemize}
+    \end{placeholder}
+\end{frame}
+
+\begin{frame}{Log Categories and Storage}
+    \begin{placeholder}{Giulia's Section}
+        \textbf{Log Categories:}
+        \begin{itemize}
+            \item Application logs
+            \item System logs (Slurm)
+            \item Benchmark logs
+            \item Infrastructure logs
+        \end{itemize}
+
+        \vspace{0.3cm}
+        \textbf{Log Format:}
+        \begin{itemize}
+            \item Structured logging (JSON)
+            \item Timestamps and correlation IDs
+            \item Storage organization
+            \item Retention policies
+        \end{itemize}
+    \end{placeholder}
+\end{frame}
+
+% ============================================================================
+\section{Division of Work}
+% ============================================================================
+
+\begin{frame}{Alberto Finardi}
+    \begin{center}
+    \begin{tikzpicture}
+        % Header
+        \node[component, minimum width=10cm, minimum height=1.2cm, fill=primary!20] at (0, 3) {
+            \textbf{\Large Alberto Finardi}\\
+            {\normalsize System Architect \& Core Implementation}
+        };
+
+        % Contributions in grid
+        \node[component, minimum width=4.5cm, minimum height=1.5cm, fill=primary!10] at (-2.5, 1) {
+            \textbf{Infrastructure}\\[4pt]
+            {\scriptsize Core architecture\\
+            Factory pattern\\
+            Service registry}
+        };
+
+        \node[server, minimum width=4.5cm, minimum height=1.5cm] at (2.5, 1) {
+            \textbf{Server Managers}\\[4pt]
+            {\scriptsize Ollama\\
+            vLLM\\
+            Ray orchestration}
+        };
+
+        \node[client, minimum width=4.5cm, minimum height=1.5cm] at (-2.5, -0.8) {
+            \textbf{Workload System}\\[4pt]
+            {\scriptsize Controllers\\
+            Executors\\
+            Benchmarking}
+        };
+
+        \node[component, minimum width=4.5cm, minimum height=1.5cm, fill=secondary!10, draw=secondary] at (2.5, -0.8) {
+            \textbf{Integration}\\[4pt]
+            {\scriptsize CLI interface\\
+            Slurm orchestration\\
+            Documentation}
+        };
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Giovanni}
+    \begin{center}
+    \begin{tikzpicture}
+        % Header
+        \node[monitor, minimum width=10cm, minimum height=1.2cm] at (0, 3) {
+            \textbf{\Large Giovanni}\\
+            {\normalsize Monitoring \& Observability}
+        };
+
+        % Contributions
+        \node[monitor, minimum width=4.5cm, minimum height=2cm] at (-2.5, 0.5) {
+            \textbf{Prometheus}\\[6pt]
+            {\scriptsize Configuration\\
+            Metric collection\\
+            Scraping setup\\
+            Data retention}
+        };
+
+        \node[monitor, minimum width=4.5cm, minimum height=2cm] at (2.5, 0.5) {
+            \textbf{Grafana}\\[6pt]
+            {\scriptsize Dashboard design\\
+            Ollama panels\\
+            vLLM panels\\
+            Visualization}
+        };
+
+        \node[component, minimum width=9.5cm, minimum height=0.9cm, fill=warning!10, draw=warning] at (0, -1.5) {
+            \textbf{Docker Containers} \textbullet{} \textbf{Port Configuration} \textbullet{} \textbf{SSH Tunneling}
+        };
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Laura}
+    \begin{center}
+    \begin{tikzpicture}
+        % Header
+        \node[client, minimum width=10cm, minimum height=1.2cm] at (0, 3) {
+            \textbf{\Large Laura}\\
+            {\normalsize Recipe Validation \& Benchmark Execution}
+        };
+
+        % Contributions
+        \node[client, minimum width=4.5cm, minimum height=2cm] at (-2.5, 0.5) {
+            \textbf{Validation}\\[6pt]
+            {\scriptsize JSON Schema\\
+            Custom validators\\
+            Error formatting\\
+            Service configs}
+        };
+
+        \node[client, minimum width=4.5cm, minimum height=2cm] at (2.5, 0.5) {
+            \textbf{Benchmarking}\\[6pt]
+            {\scriptsize Ollama execution\\
+            vLLM execution\\
+            Parameter sweeps\\
+            Result analysis}
+        };
+
+        \node[component, minimum width=9.5cm, minimum height=0.9cm, fill=accent!10, draw=accent] at (0, -1.5) {
+            \textbf{Testing} \textbullet{} \textbf{Performance Analysis} \textbullet{} \textbf{Experiment Validation}
+        };
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Giulia}
+    \begin{center}
+    \begin{tikzpicture}
+        % Header
+        \node[component, minimum width=10cm, minimum height=1.2cm, fill=warning!20, draw=warning] at (0, 3) {
+            \textbf{\Large Giulia}\\
+            {\normalsize Logging System Architecture}
+        };
+
+        % Contributions
+        \node[component, minimum width=4.5cm, minimum height=2cm, fill=warning!10, draw=warning] at (-2.5, 0.5) {
+            \textbf{Architecture}\\[6pt]
+            {\scriptsize BaseLogCollector\\
+            Abstract interfaces\\
+            LogSource design\\
+            Strategy pattern}
+        };
+
+        \node[component, minimum width=4.5cm, minimum height=2cm, fill=warning!10, draw=warning] at (2.5, 0.5) {
+            \textbf{Implementation}\\[6pt]
+            {\scriptsize TailerLogCollector\\
+            Remote collection\\
+            Structured JSON\\
+            Aggregation}
+        };
+
+        \node[component, minimum width=9.5cm, minimum height=0.9cm, fill=secondary!10, draw=secondary] at (0, -1.5) {
+            \textbf{Log Categories} \textbullet{} \textbf{Storage Organization} \textbullet{} \textbf{Retention Policies}
+        };
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+% ============================================================================
+\section{Conclusion}
+% ============================================================================
+
+\begin{frame}{Key Achievements \& Future Work}
+    \begin{center}
+    \begin{tikzpicture}
+        % Accomplished section
+        \node[component, minimum width=6cm, minimum height=0.8cm, fill=primary!20] at (-3.5, 3.2) {
+            \textbf{Accomplished}
+        };
+
+        \node[component, minimum width=5.5cm, minimum height=1.2cm, fill=primary!10] at (-3.5, 1.7) {
+            \textbf{Modular Architecture}\\
+            {\scriptsize Factory \& Template patterns}
+        };
+
+        \node[server, minimum width=5.5cm, minimum height=1.2cm] at (-3.5, 0.1) {
+            \textbf{Multi-Service Support}\\
+            {\scriptsize Ollama, vLLM, Ray}
+        };
+
+        \node[monitor, minimum width=5.5cm, minimum height=1.2cm] at (-3.5, -1.5) {
+            \textbf{Real-Time Monitoring}\\
+            {\scriptsize Prometheus + Grafana}
+        };
+
+        % Future work section
+        \node[component, minimum width=6cm, minimum height=0.8cm, fill=success!20, draw=success] at (3.5, 3.2) {
+            \textbf{Future Work}
+        };
+
+        \node[component, minimum width=5.5cm, minimum height=1.2cm, fill=success!10, draw=success] at (3.5, 1.7) {
+            \textbf{Additional Services}\\
+            {\scriptsize TensorRT, Triton}
+        };
+
+        \node[component, minimum width=5.5cm, minimum height=1.2cm, fill=success!10, draw=success] at (3.5, 0.1) {
+            \textbf{Kubernetes Support}\\
+            {\scriptsize Cloud orchestration}
+        };
+
+        \node[component, minimum width=5.5cm, minimum height=1.2cm, fill=success!10, draw=success] at (3.5, -1.5) {
+            \textbf{Web Dashboard}\\
+            {\scriptsize Interactive UI}
+        };
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Questions?}
+    \begin{center}
+    \begin{tikzpicture}
+        % Thank you box
+        \node[component, minimum width=11cm, minimum height=2cm, fill=primary!15] at (0, 2.5) {
+            \Huge \textbf{Thank You!}
+        };
+
+        % Question box
+        \node[component, minimum width=11cm, minimum height=1.2cm, fill=accent!15, draw=accent] at (0, 0.5) {
+            \Large \textbf{Questions?}
+        };
+
+        % Services footer
+        \node[server, minimum width=3.2cm, minimum height=0.8cm] at (-3.8, -1.5) {\textbf{Ollama}};
+        \node[server, minimum width=3.2cm, minimum height=0.8cm] at (0, -1.5) {\textbf{vLLM}};
+        \node[server, minimum width=3.2cm, minimum height=0.8cm] at (3.8, -1.5) {\textbf{Ray}};
+
+        % Project name
+        \node[font=\small] at (0, -2.7) {\texttt{hpc-benchmark-toolkit} | MeluXina HPC Cluster};
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\end{document}
