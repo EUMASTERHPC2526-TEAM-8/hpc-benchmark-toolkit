@@ -1602,14 +1602,15 @@ This section documents the contributions of each team member to the project.
 
 \subsection{Alberto Finardi}
 
-\textbf{Role}: System Architect and Service Implementation\\
+\textbf{Role}: System Architect, Infrastructure, and Core Implementation\\
 \textbf{Contributions}:
 \begin{itemize}
-    \item \textbf{Core Architecture Design}
+    \item \textbf{Core Infrastructure}
     \begin{itemize}
-        \item Designed the overall system architecture
-        \item Implemented the Service Factory pattern
-        \item Created the modular component structure
+        \item Designed and implemented the overall system architecture
+        \item Created the Service Factory pattern for extensibility
+        \item Built the modular component structure
+        \item Implemented service registry for dynamic component loading
     \end{itemize}
 
     \item \textbf{Server Management}
@@ -1617,35 +1618,53 @@ This section documents the contributions of each team member to the project.
         \item Implemented \texttt{BaseServerManager} abstract class
         \item Developed \texttt{OllamaServerManager} with health checks and model pulling
         \item Developed \texttt{VllmServerManager} with distributed support
-        \item Created \texttt{RayClusterManager} for distributed vLLM
+        \item Created \texttt{RayClusterManager} for distributed vLLM deployments
     \end{itemize}
 
-    \item \textbf{Workload Control}
+    \item \textbf{Workload Controllers}
     \begin{itemize}
         \item Designed \texttt{BaseWorkloadController} interface
-        \item Implemented service-specific controllers
-        \item Developed HTTP-based client coordination
+        \item Implemented service-specific controllers (Ollama, vLLM)
+        \item Developed HTTP-based client coordination protocol
     \end{itemize}
 
-    \item \textbf{Workload Execution}
+    \item \textbf{Workload Executors}
     \begin{itemize}
-        \item Created \texttt{BaseWorkloadExecutor} Flask server
-        \item Implemented REST API endpoints
-        \item Developed thread pool management
+        \item Created \texttt{BaseWorkloadExecutor} Flask server framework
+        \item Implemented REST API endpoints for workload management
+        \item Developed thread pool management for concurrent requests
+        \item Built metrics collection infrastructure
+    \end{itemize}
+
+    \item \textbf{Benchmarking Framework}
+    \begin{itemize}
+        \item Implemented core benchmarking logic
+        \item Developed request generation and load patterns
+        \item Created latency measurement and metrics aggregation
+        \item Built Ollama and vLLM specific benchmark implementations
     \end{itemize}
 
     \item \textbf{CLI Development}
     \begin{itemize}
-        \item Developed \texttt{benchmark\_cli.py}
+        \item Developed \texttt{benchmark\_cli.py} with three main commands
         \item Implemented interactive recipe creation wizard
         \item Created deployment and job submission logic
+        \item Built recipe listing and management features
     \end{itemize}
 
     \item \textbf{Orchestration}
     \begin{itemize}
-        \item Implemented main orchestrator logic
+        \item Implemented main orchestrator logic (\texttt{orchestrator.py})
         \item Developed seven-phase execution model
         \item Created Slurm sbatch script generation
+        \item Built node allocation and resource management
+    \end{itemize}
+
+    \item \textbf{Basic Logging Infrastructure}
+    \begin{itemize}
+        \item Set up initial logging framework
+        \item Implemented basic log output and formatting
+        \item Created log directory structure
     \end{itemize}
 
     \item \textbf{Documentation}
@@ -1658,147 +1677,98 @@ This section documents the contributions of each team member to the project.
 
     \item \textbf{Integration}
     \begin{itemize}
-        \item Integrated all components
-        \item Implemented service registry
-        \item Coordinated team contributions
+        \item Integrated all team contributions
+        \item Coordinated component interfaces
+        \item Performed system testing and debugging
     \end{itemize}
 \end{itemize}
 
 \subsection{Giovanni}
 
-\textbf{Role}: Monitoring
-
-\begin{placeholder}{Giovanni's Contributions}
+\textbf{Role}: Monitoring Integration\\
+\textbf{Contributions}:
 \begin{itemize}
-    \item \textbf{Monitor Tool} (\texttt{src/monitor/monitor.py})
+    \item \textbf{Prometheus Integration}
     \begin{itemize}
-        \item Built a tool that measures CPU, GPU, and memory usage
-        \item Runs in the background and checks every 1 second
-        \item Saves all measurements to a CSV file for later analysis
-        \item Works with Prometheus (data collection system) to send data to your laptop
-        \item Supports computers with multiple GPUs
-    \end{itemize}
-
-    \item \textbf{Prometheus Setup}
-    \begin{itemize}
-        \item Set up Prometheus Pushgateway (a storage box for metric data)
-        \item Made data format that Prometheus understands
-        \item Made it so data is sent every 15 seconds to storage
-        \item Created the configuration file (\texttt{monitoring/prometheus.yml})
-        \item Made metrics available on port 6000 on each client computer
+        \item Configured Prometheus for metrics collection
+        \item Set up Docker container for Prometheus server
     \end{itemize}
 
     \item \textbf{Grafana Dashboards}
     \begin{itemize}
-        \item Docker setup for Grafana (dashboard program)
-        \item Designed and built two dashboards (one for Ollama, one for vLLM)
-        \item Each dashboard has 13 different graphs and numbers
-        \item Graphs show: requests per second, response time, success vs failure, errors
-        \item Made it so you can see data from each computer separately or all together
-        \item Made dashboards refresh automatically to show live data
-    \end{itemize}
-
-    \item \textbf{Docker Monitoring Stack}
-    \begin{itemize}
-        \item Set up Docker containers for Prometheus, Grafana, and storage
-        \item Made sure data is saved even if you restart
-        \item Made Grafana automatically load the dashboards
-        \item Created a simple script (\texttt{monitoring/start.sh}) to start everything with one command
-    \end{itemize}
-
-    \item \textbf{SSH Tunnels for Secure Connection}
-    \begin{itemize}
-        \item Wrote guides explaining how to create secure connections from your laptop to HPC
-        \item Set up port numbers (25000-25001 for Ollama, 25002-25003 for vLLM)
-        \item Made it easy to find which computers to connect to from the job logs
-        \item Wrote solutions for common connection problems
-    \end{itemize}
-
-    \item \textbf{Documentation}
-    \begin{itemize}
-        \item Created \texttt{monitoring/QUICKSTART.md} with step-by-step setup guide
-        \item Wrote Phase 3 (Monitoring Setup) execution flow description
-        \item Provided comprehensive Prometheus query examples and dashboard configuration details
+        \item Created Grafana dashboards for Ollama and vLLM metrics visualization
+        \item Configured Docker container for Grafana
     \end{itemize}
 \end{itemize}
-\end{placeholder}
 
 \subsection{Laura}
 
-\textbf{Role}: Validation \& Benchmarking
-
-\begin{placeholder}{Laura's Contributions}
-Please list your specific contributions:
+\textbf{Role}: Recipe Validation and Benchmark Execution\\
+\textbf{Contributions}:
 \begin{itemize}
-    \item \textbf{Recipe Validation}
+    \item \textbf{Recipe Validation System}
     \begin{itemize}
-        \item JSON Schema design (recipe-format.yaml)
-        \item Validation logic implementation
-        \item Custom validators
-        \item Error message formatting
+        \item Designed JSON Schema for recipe validation (\texttt{schemas/recipe-format.yaml})
+        \item Implemented validation logic and error handling
+        \item Created custom validators for service-specific configurations
+        \item Developed user-friendly error message formatting
+        \item Built schema versioning support
     \end{itemize}
 
-    \item \textbf{Benchmarking Logic}
+    \item \textbf{Benchmark Execution}
     \begin{itemize}
-        \item Workload executor implementations
-        \item Request generation logic
-        \item Latency measurement
-        \item Metrics aggregation
-    \end{itemize}
-
-    \item \textbf{Load Patterns}
-    \begin{itemize}
-        \item Constant load implementation
-        \item Poisson distribution
-        \item Burst patterns
+        \item Ran and validated Ollama benchmarks on MeluXina
+        \item Ran and validated vLLM benchmarks (single and distributed)
+        \item Tested parameter sweep configurations
+        \item Verified metrics collection and reporting
     \end{itemize}
 
     \item \textbf{Documentation}
     \begin{itemize}
-        \item Recipe guide contributions
-        \item Benchmarking section of this report
+        \item Recipe validation section of this report
+        \item Benchmarking implementation section of this report
     \end{itemize}
 \end{itemize}
-\end{placeholder}
 
 \subsection{Giulia}
 
-\textbf{Role}: Logging
-
-\begin{placeholder}{Giulia's Contributions}
-Please list your specific contributions:
+\textbf{Role}: Logging System\\
+\textbf{Contributions}:
 \begin{itemize}
     \item \textbf{Logging Architecture}
     \begin{itemize}
-        \item Log collector design
-        \item Aggregation strategy
+        \item Designed overall logging architecture
+        \item Defined log sources and destinations
+        \item Created aggregation strategy for distributed logs
     \end{itemize}
 
     \item \textbf{BaseLogCollector}
     \begin{itemize}
-        \item Abstract interface implementation
-        \item LogSource dataclass design
+        \item Implemented abstract interface for log collection
+        \item Designed \texttt{LogSource} dataclass
+        \item Defined method specifications for collectors
     \end{itemize}
 
     \item \textbf{TailerLogCollector}
     \begin{itemize}
-        \item File tailing implementation
-        \item Remote log collection
+        \item Implemented file tailing for real-time log collection
+        \item Built remote node log collection via SSH
+        \item Created log aggregation from multiple sources
     \end{itemize}
 
     \item \textbf{Log Management}
     \begin{itemize}
-        \item Structured logging format
-        \item Storage organization
-        \item Correlation ID implementation
+        \item Implemented structured logging format (JSON)
+        \item Added timestamps and correlation IDs
+        \item Organized storage structure
+        \item Defined retention policies
     \end{itemize}
 
     \item \textbf{Documentation}
     \begin{itemize}
-        \item Logging section of this report
+        \item Logging system section of this report
     \end{itemize}
 \end{itemize}
-\end{placeholder}
 
 \subsection{Contribution Summary}
 
@@ -1808,10 +1778,10 @@ Please list your specific contributions:
 \toprule
 \textbf{Team Member} & \textbf{Primary Area} & \textbf{Key Deliverables} \\
 \midrule
-Alberto Finardi & Architecture \& Core & Orchestrator, Server Managers, Controllers, Executors, CLI, Documentation \\
-Giovanni & Monitoring & Monitor module, Prometheus/Grafana, Dashboards \\
-Laura & Validation \& Benchmarking & Recipe validation, Workload execution, Metrics \\
-Giulia & Logging & Log collectors, Aggregation, Storage \\
+Alberto Finardi & Infrastructure \& Core & Orchestrator, Server Managers, Controllers, Executors, Benchmarks, CLI, Basic Logging, Documentation \\
+Giovanni & Monitoring & Prometheus/Grafana integration, Dashboards \\
+Laura & Validation & Recipe validation, Benchmark execution \\
+Giulia & Logging & Log collectors, Aggregation \\
 \bottomrule
 \end{tabular}
 \caption{Team contribution summary}
