@@ -265,6 +265,7 @@ class BaseWorkloadExecutor(ABC):
         total_latency = 0.0
         total_elapsed = 0.0
         error_threads = []
+        all_latencies = []
 
         for thread_metric in self.thread_metrics:
             if "error" in thread_metric:
@@ -275,16 +276,35 @@ class BaseWorkloadExecutor(ABC):
             total_errors += thread_metric.get("errors", 0)
             total_latency += thread_metric.get("total_latency", 0.0)
             total_elapsed = max(total_elapsed, thread_metric.get("elapsed_seconds", 0.0))
+            all_latencies.extend(thread_metric.get("latencies", []))
 
         # Calculate aggregate metrics
         avg_latency = total_latency / total_requests if total_requests > 0 else 0
         throughput = total_requests / total_elapsed if total_elapsed > 0 else 0
+
+        # Percentiles (p50/p90/p99) over all recorded request latencies
+        all_latencies.sort()
+
+        def percentile(p: float) -> float:
+            if not all_latencies:
+                return 0.0
+            # nearest-rank style index
+            idx = int(round((p / 100.0) * (len(all_latencies) - 1)))
+            return all_latencies[idx]
+
+        p50 = percentile(50)
+        p90 = percentile(90)
+        p99 = percentile(99)
+
 
         self.metrics = {
             "total_requests": total_requests,
             "errors": total_errors,
             "elapsed_seconds": total_elapsed,
             "avg_latency_seconds": avg_latency,
+            "p50_latency_seconds": p50,  
+            "p90_latency_seconds": p90, 
+            "p99_latency_seconds": p99, 
             "throughput_rps": throughput,
             "num_threads": len(self.thread_metrics),
             "thread_errors": error_threads if error_threads else None,

@@ -193,6 +193,26 @@ properties:
         description: "Warmup period before metrics collection"
       
       # Inference-specific
+      benchmark_suite:
+        type: array
+        description: "Optional list of benchmarks to run sequentially"
+        items:
+          type: object
+          required: [name]
+          additionalProperties: false
+          properties:
+            name:
+              type: string
+            duration:
+              type: string
+              pattern: "^[0-9]+[smh]$"
+            num_threads:
+              type: integer
+              minimum: 1
+            sleep_seconds:
+              type: number
+              minimum: 0
+
       model:
         type: string
         description: Model name (for inference workloads)

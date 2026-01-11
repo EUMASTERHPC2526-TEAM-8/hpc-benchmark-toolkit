@@ -345,6 +345,12 @@ fi
 set -e
 export OUTPUT_DIR="$(pwd)/{output_dir}"
 mkdir -p $OUTPUT_DIR
+LOG_DIR="$OUTPUT_DIR/logs"
+mkdir -p "$LOG_DIR"
+
+# Capture EVERYTHING the sbatch wrapper prints (stdout+stderr) into one file
+exec > >(tee -a "$LOG_DIR/job.log") 2>&1
+
 mkdir -p {container_dir}
 BENCHMARK_DIR="$(pwd)/benchmark"
 

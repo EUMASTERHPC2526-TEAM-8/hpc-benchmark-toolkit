@@ -88,6 +88,7 @@ class OllamaWorkloadExecutor(BaseWorkloadExecutor):
         request_count = 0
         error_count = 0
         total_latency = 0.0
+        latencies = []
         start_time = time.time()
 
         # Parse duration (simplified - assumes format like "10m", "2h", "300s")
@@ -120,6 +121,7 @@ class OllamaWorkloadExecutor(BaseWorkloadExecutor):
                 if 200 <= res.status_code < 300:
                     request_count += 1
                     total_latency += request_latency
+                    latencies.append(request_latency)
                 else:
                     error_count += 1
                     print(f"[Thread {thread_id}] Request failed: HTTP {res.status_code}")
@@ -128,8 +130,10 @@ class OllamaWorkloadExecutor(BaseWorkloadExecutor):
                 error_count += 1
                 print(f"[Thread {thread_id}] Request error: {e}")
 
-            # Small delay to avoid overwhelming servers
-            time.sleep(0.1)
+            # Configurable delay to control request pacing
+            sleep_s = float(workload_config.get("sleep_seconds", 0.1))
+            if sleep_s > 0:
+                time.sleep(sleep_s)
 
         # Calculate thread-local metrics
         elapsed_time = time.time() - start_time
@@ -144,6 +148,7 @@ class OllamaWorkloadExecutor(BaseWorkloadExecutor):
             "errors": error_count,
             "elapsed_seconds": elapsed_time,
             "total_latency": total_latency,  # This will be summed for avg calculation
+            "latencies": latencies  # This will be combined for percentile calculations
         }
 
     def _ensure_datasets_installed(self):

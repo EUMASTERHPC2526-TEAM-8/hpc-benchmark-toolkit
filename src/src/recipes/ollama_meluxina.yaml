@@ -41,6 +41,21 @@ workload:
   duration: "2m"
   warmup: "1m"
   model: "llama2"
+  benchmark_suite:
+    - name: latency_c1
+      duration: "2m"
+      num_threads: 1
+      sleep_seconds: 0.05
+
+    - name: latency_c10
+      duration: "2m"
+      num_threads: 10
+      sleep_seconds: 0.01
+
+    - name: throughput_c10_nosleep
+      duration: "2m"
+      num_threads: 10
+      sleep_seconds: 0.0
 
 servers:
   health_check:
@@ -52,6 +67,7 @@ servers:
     gpu_layers: 0
 
 artifacts:
+  container: "apptainer"
   containers_dir: "/project/home/p200776/team8/containers/"
   service:
     path: "ollama_latest.sif"

@@ -51,7 +51,8 @@ class RecipeValidator:
         """
         if schema_path is None:
             # Default schema location
-            schema_path = Path(__file__).parent / "schemas" / "recipe-format.yaml"
+            schema_path = Path(__file__).resolve().parents[1] / "schemas" / "recipe-format.yaml"
+
         
         self.schema_path = schema_path
         self.schema = self._load_schema()
@@ -341,7 +342,7 @@ class RecipeValidator:
         
         # Validate component-service compatibility
         valid_services = {
-            "inference": ["triton", "vllm"],
+            "inference": ["triton", "vllm", "ollama"],
             "storage": ["postgres", "s3", "fileio"],
             "vectordb": ["milvus", "faiss", "weaviate", "chroma"]
         }
@@ -364,12 +365,15 @@ class RecipeValidator:
                     "Inference workload requires 'model' parameter",
                     "workload.model"
                 ))
-            if "prompt_len" not in workload:
-                errors.append(ValidationIssue(
-                    IssueLevel.ERROR,
-                    "Inference workload requires 'prompt_len' parameter",
-                    "workload.prompt_len"
-                ))
+            # Only require prompt_len for synthetic inference services.
+            # Ollama workloads can be dataset-driven and do not need prompt_len.
+            if service in ("triton", "vllm"):
+                if "prompt_len" not in workload:
+                    errors.append(ValidationIssue(
+                        IssueLevel.ERROR,
+                        "Inference workload requires 'prompt_len' parameter",
+                        "workload.prompt_len"
+                    ))
         
         # Validate duration format
         if "duration" in workload:

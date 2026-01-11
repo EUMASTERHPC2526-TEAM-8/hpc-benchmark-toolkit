@@ -214,35 +214,135 @@ def main():
             print("✓ Log collection active\n")
 
     # Start workload
-    print("\nStarting workload execution...")
-    workload_config = {
+    # ----------------------------
+    # Benchmark suite execution
+    # ----------------------------
+    import copy
+
+    def _merge_workload_overrides(workload_config_input: dict, overrides: dict) -> dict:
+        """
+        Merge per-benchmark overrides into either:
+          - workload_config_input["workload"] (preferred nested format), or
+          - workload_config_input (flat format)
+        Returns a new dict (does not mutate input).
+        """
+        cfg = copy.deepcopy(workload_config_input)
+        if isinstance(cfg.get("workload"), dict):
+            cfg["workload"].update(overrides)
+        else:
+            cfg.update(overrides)
+        return cfg
+
+    def _get_suite(workload_config_input: dict) -> list:
+        # Support both formats:
+        #  - top-level benchmark_suite
+        #  - nested workload.benchmark_suite
+        if isinstance(workload_config_input.get("workload"), dict) and isinstance(workload_config_input["workload"].get("benchmark_suite"), list):
+            return workload_config_input["workload"]["benchmark_suite"]
+        if isinstance(workload_config_input.get("benchmark_suite"), list):
+            return workload_config_input["benchmark_suite"]
+        return []
+
+    def _poll_until_done(poll_interval_s: int = 10):
+        print("Polling client metrics to check for completion...")
+        while True:
+            all_metrics = workload_controller.fetch_metrics()
+            running_status = [m.get("running", True) for m in all_metrics.values()]
+            print(f"Client running status: {running_status}")
+            if all(not r for r in running_status):
+                print("All clients have completed the workload.")
+                return
+            print(f"Waiting {poll_interval_s} seconds before next poll...")
+            time.sleep(poll_interval_s)
+
+    def _write_json(path: str, obj: dict):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(obj, f, indent=2)
+
+    # Always include server endpoints in the workload config sent to clients
+    base_workload_payload = {
         "server_endpoints": service_endpoints,
         **workload_config_input
     }
 
-    if not workload_controller.start_workload(workload_config):
-        print("Failed to start workload.")
-        exit(1)
+    suite = _get_suite(workload_config_input)
 
-    print("All clients launched successfully.")
+    results_dir = os.path.join(OUTPUT_DIR, "results")
+    os.makedirs(results_dir, exist_ok=True)
 
-    # Periodically poll /metrics to check if all clients are done
-    poll_interval = 10  # seconds
-    print("Polling client metrics to check for completion...")
-    while True:
-        all_metrics = workload_controller.fetch_metrics()
-        running_status = [metrics.get("running", True) for metrics in all_metrics.values()]
-        print(f"Client running status: {running_status}")
-        if all(not running for running in running_status):
-            print("All clients have completed the workload.")
-            break
-        print(f"Waiting {poll_interval} seconds before next poll...")
-        time.sleep(poll_interval)
+    suite_results = {
+        "experiment": {
+            "service": service,
+            "model": model,
+            "server_nodes": server_nodes,
+            "server_port": server_port,
+            "client_nodes": client_nodes,
+            "client_port": client_port,
+            "clients_per_node": clients_per_node,
+            "output_dir": OUTPUT_DIR,
+        },
+        "benchmarks": []
+    }
 
-    print("Fetching final metrics from all clients...")
-    final_metrics = workload_controller.fetch_metrics()
-    print(f"Final metrics: {final_metrics}")
-    print("Benchmark complete.")
+    # If no suite is provided, run exactly one benchmark (backward compatible)
+    if not suite:
+        suite = [{
+            "name": "single_run",
+            # no overrides; uses whatever is already in workload_config_input
+        }]
+
+    for i, bench in enumerate(suite, start=1):
+        bench_name = bench.get("name", f"bench_{i}")
+        print("\n" + "=" * 60)
+        print(f"Running benchmark {i}/{len(suite)}: {bench_name}")
+        print("=" * 60)
+
+        # Build per-benchmark config by applying overrides
+        per_bench_input = _merge_workload_overrides(workload_config_input, {k: v for k, v in bench.items() if k != "name"})
+        workload_payload = {
+            "server_endpoints": service_endpoints,
+            **per_bench_input
+        }
+
+        # Add benchmark identity so executors can include it in their metrics if desired
+        if isinstance(workload_payload.get("workload"), dict):
+            workload_payload["workload"]["benchmark_name"] = bench_name
+        else:
+            workload_payload["benchmark_name"] = bench_name
+
+        print("Starting workload execution...")
+        if not workload_controller.start_workload(workload_payload):
+            print(f"Failed to start workload for benchmark '{bench_name}'.")
+            exit(1)
+
+        print("All clients launched successfully.")
+        _poll_until_done(poll_interval_s=10)
+
+        print("Fetching final metrics from all clients...")
+        final_metrics = workload_controller.fetch_metrics()
+
+        # Save per-benchmark raw metrics
+        bench_out_path = os.path.join(results_dir, f"{bench_name}.metrics.json")
+        _write_json(bench_out_path, {
+            "benchmark_name": bench_name,
+            "overrides": {k: v for k, v in bench.items() if k != "name"},
+            "client_metrics": final_metrics
+        })
+        print(f"Saved metrics: {bench_out_path}")
+
+        suite_results["benchmarks"].append({
+            "benchmark_name": bench_name,
+            "metrics_file": bench_out_path,
+            "client_metrics": final_metrics
+        })
+
+    # Write suite summary
+    suite_out_path = os.path.join(results_dir, "benchmark_suite.summary.json")
+    _write_json(suite_out_path, suite_results)
+    print("\nBenchmark suite complete.")
+    print(f"Suite summary saved: {suite_out_path}")
+
 
     # Stop monitor if it was running
     if monitor is not None:

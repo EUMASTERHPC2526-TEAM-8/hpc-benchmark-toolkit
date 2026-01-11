@@ -9,11 +9,12 @@ SCENARIO=$(python3 -c "import yaml; print(yaml.safe_load(open('$RECIPE'))['scena
 SBATCH_FILE="${SCENARIO}_server_only.sh"
 
 echo "[1] Generating sbatch script..."
-python3 src/generate_sbatch_simple.py "$RECIPE" "$SBATCH_FILE"
+python3 src/src/generate_sbatch_simple.py "$RECIPE" "$SBATCH_FILE"
 
 echo "[2] Copying files to cluster..."
-rsync -avz benchmark "$CLUSTER:$REMOTE_PATH/"
-rsync -avz config "$CLUSTER:$REMOTE_PATH/"
+rsync -avz src/benchmark "$CLUSTER:$REMOTE_PATH/"
+rsync -avz src/config "$CLUSTER:$REMOTE_PATH/"
+rsync -avz src/monitor "$CLUSTER:$REMOTE_PATH/" 
 scp "$SBATCH_FILE" "$RECIPE" "$CLUSTER:$REMOTE_PATH/"
 
 echo "[3] Submitting job..."
