@@ -44,7 +44,8 @@ The HPC Benchmark Toolkit is a production-ready framework for:
 | **Real-Time Monitoring** | Prometheus/Grafana with live dashboards |
 | **Recipe-Driven** | YAML configurations for reproducible experiments |
 | **HPC-Optimized** | Slurm integration, Apptainer containers |
-| **Comprehensive Metrics** | Latency (p50/p90/p99), throughput, resource utilization |
+| **Comprehensive Metrics** | Latency (avg, p50, p90, p99), throughput, errors, resource utilization |
+
 
 ### 1.3 Supported Services
 
@@ -365,6 +366,14 @@ python3 orchestrator.py \
 
 ### 6.1 Recipe Structure
 
+### 6.1.1 Benchmark Suites (Sequential Benchmarks)
+
+The framework supports running multiple benchmarks sequentially within a single job
+using the `benchmark_suite` field under `workload`.
+
+Each entry in the suite overrides workload parameters for that benchmark only.
+
+
 Recipes are YAML files that define benchmark configurations:
 
 ```yaml
@@ -412,6 +421,21 @@ workload:
   warmup: "1m"
   model: "llama2"
   clients_per_node: 10
+  benchmark_suite:                    #For each benchmark: Metrics are collected independently and saved under `results/`
+    - name: latency_c1                
+      duration: "2m"
+      num_threads: 1                  # controls client-side concurrency
+      sleep_seconds: 0.05             #controls request pacing
+
+    - name: latency_c10
+      duration: "2m"
+      num_threads: 10
+      sleep_seconds: 0.01
+
+    - name: throughput_c10_nosleep
+      duration: "2m"
+      num_threads: 10
+      sleep_seconds: 0.0
 
 servers:
   health_check:
@@ -486,10 +510,16 @@ workload:
 Recipes are validated against the schema:
 
 - **Required fields**: `scenario`, `partition`, `account`, `resources`, `workload`, `orchestration`
+- For inference workloads:
+  - `prompt_len` is required for synthetic services (vLLM, Triton)
+  - `prompt_len` is optional for dataset-driven services (Ollama)
 - **Service must be**: `ollama`, `vllm`, or registered custom service
 - **Resource values**: Must be positive integers
 - **Container path**: Must end in `.sif`
 - **GPU partition**: If `gpus > 0`, partition should be `gpu`
+
+Note: Parameter sweeps expand into multiple trials automatically, while `benchmark_suite` runs explicitly defined benchmarks sequentially within a single job.
+
 
 ---
 
@@ -565,6 +595,9 @@ curl http://localhost:25000/health
 | `ollama_requests_total` | Total requests made | Counter |
 | `ollama_errors_total` | Total errors | Counter |
 | `ollama_request_latency_seconds` | Average latency | Gauge |
+| `ollama_p50_latency_seconds` | 50th percentile latency | Gauge |
+| `ollama_p90_latency_seconds` | 90th percentile latency | Gauge |
+| `ollama_p99_latency_seconds` | 99th percentile latency | Gauge |
 | `ollama_throughput_rps` | Requests per second | Gauge |
 | `ollama_elapsed_seconds` | Total elapsed time | Gauge |
 | `ollama_threads` | Concurrent threads | Gauge |
