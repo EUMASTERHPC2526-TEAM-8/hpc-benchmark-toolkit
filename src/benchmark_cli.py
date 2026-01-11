@@ -446,8 +446,11 @@ class BenchmarkCLI:
         print(f"\n[1] Generating sbatch script...")
 
         try:
+            project_root = Path(__file__).parent
+            generator_path = project_root / "src" / "generate_sbatch_simple.py"
+
             subprocess.run([
-                "python3", "src/generate_sbatch_simple.py",
+                "python3", str(generator_path),
                 str(recipe_path), sbatch_file
             ], check=True)
             print(f"    ✓ Generated: {sbatch_file}")
@@ -459,14 +462,19 @@ class BenchmarkCLI:
         print(f"\n[2] Copying files to cluster...")
 
         try:
+            # Resolve local directories relative to this file to avoid cwd issues
+            project_root = Path(__file__).parent
+            local_benchmark = project_root / "benchmark"
+            local_config = project_root / "config"
+
             # Copy benchmark directory
             subprocess.run([
-                "rsync", "-avz", "benchmark", f"{cluster}:{remote_path}/"
+                "rsync", "-avz", str(local_benchmark), f"{cluster}:{remote_path}/"
             ], check=True)
 
             # Copy config directory
             subprocess.run([
-                "rsync", "-avz", "config", f"{cluster}:{remote_path}/"
+                "rsync", "-avz", str(local_config), f"{cluster}:{remote_path}/"
             ], check=True)
 
             # Copy sbatch script and recipe

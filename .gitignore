@@ -2,7 +2,6 @@
 # Matches __pycache__ at any level
 __pycache__/
 **/__pycache__/
-*.DS_Store
 
 # Ignore compiled Python files
 *.py[cod]
@@ -26,6 +25,27 @@ env/
 # Editor temp files (optional)
 *.swp
 *.swo
+*.DS_Store
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.nav
+*.snm
+*.toc
+*.out
+*.tex.bak*
+
+# Generated sbatch scripts (auto-generated on deploy)
+*_server_only.sh
+*-server.sh
+
+# Benchmark output directories
+benchmark_output/
+experiments/
 
 # Ignore monitor tool generated files
 metrics.csv

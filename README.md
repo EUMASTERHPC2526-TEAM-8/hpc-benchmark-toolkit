@@ -228,10 +228,15 @@ python3 src/benchmark/orchestrator.py \
 
 ### 4.2 Monitoring Metrics with CLI
 
+**Step 0: Put your correct meluxina user
+```bash
+USER=u103217 
+# or any of yours
+```
+
 **Step 1: Start local monitoring stack**
 ```bash
-cd monitoring
-./start.sh
+cd monitoring && ./start.sh
 ```
 
 **Step 2: Deploy and run benchmark**
@@ -239,52 +244,41 @@ cd monitoring
 cd ../src
 python3 benchmark_cli.py run --recipe src/recipes/ollama_meluxina.yaml
 # Input: meluxina
-# Input: /mnt/tier2/users/YOUR_USERNAME/ollama-test
-# Note the Job ID from output (e.g., "Submitted batch job 3906845")
+# Input: /mnt/tier2/users/$USER/ollama-test
+# Note the Job ID from output
 ```
 
-**Step 3: Find client nodes from job logs**
+**Step 3: Setup monitoring tunnels automatically**
 ```bash
-ssh meluxina squeue
+# Check job status first
+ssh meluxina "squeue -u \$USER"
 
-# Get log file path, replacing JOBID with the correct job id
-ssh meluxina "scontrol show job JOBID | grep StdOut"
-# Output example: StdOut=/mnt/tier2/users/u103217/ollama-meluxina-test/logs/ollama-meluxina-test_20260105_170946_3907776.out
-
-# Estraggo automaticamente il path completo
-LOG_PATH=$(ssh meluxina "scontrol show job 3907986 | grep StdOut | awk -F'=' '{print $2}'")
-
-# Find client nodes using the FULL log path from above (they run the metrics endpoint on port 6000)
-ssh meluxina "cat $LOG_PATH" | grep "Client nodes"
-# Output example: Client nodes: mel2120 mel2148
+# Setup tunnels (replace JOBID with your job number)
+./setup_monitoring.sh JOBID ollama    # For Ollama
+./setup_monitoring.sh JOBID vllm      # For vLLM
 ```
 
-**Step 4: Open SSH tunnels to client nodes**
+**Step 4: View metrics**
 ```bash
-# For Ollama (ports 25000-25001)
-ssh -N -L 25000:mel21xx:6000 meluxina &
-ssh -N -L 25001:mel21yy:6000 meluxina &
+# Check metrics endpoint
+curl http://localhost:25000/metrics/prometheus | head -20  # Ollama
+curl http://localhost:25002/metrics/prometheus | head -20  # vLLM
 
-# For vLLM (ports 25002-25003)
-# ssh -N -L 25002:melXXXX:6000 meluxina &
-# ssh -N -L 25003:melYYYY:6000 meluxina &
-
-# Verify metrics endpoint
-curl http://localhost:25000/metrics/prometheus | head -5
-```
-
-**Step 5: View metrics in Grafana**
-```bash
+# Open Grafana
 open http://localhost:3001
 # Login: admin / admin
-# Navigate to: Dashboards → "Ollama — Workload Overview" or "vLLM — Workload Overview"
+# Dashboards: "Ollama — Workload Overview" or "vLLM — Workload Overview"
 ```
 
-**Important:**
-- Metrics are **published only when the job completes**
-- During execution: `workload_running=1` gauge is visible
-- After completion: Refresh Grafana to see throughput, latency, requests
-- Keep SSH tunnels open until job finishes
+**Manual tunnel setup (if needed):**
+```bash
+# Find client nodes
+ssh meluxina "scontrol show job JOBID | grep StdOut | awk -F'=' '{print \$2}' | xargs cat | grep 'Client nodes'"
+
+# Create tunnels (replace mel2XXX with actual node names)
+ssh -N -L 25000:mel2XXX:6000 meluxina &  # Ollama
+ssh -N -L 25002:mel2XXX:6000 meluxina &  # vLLM
+```
 
 ### 4.3 Quick Benchmark with Monitoring
 
