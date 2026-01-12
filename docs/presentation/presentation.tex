@@ -353,16 +353,15 @@
 \end{frame}
 
 \begin{frame}{Recipe Validation}
-    \begin{placeholder}{Laura's Section}
-        \begin{itemize}
-            \item JSON Schema validation implementation
-            \item Validation rules and error messages
-            \item Custom validators for service-specific configs
-            \item Schema versioning support
-            \item Interactive validation mode
-        \end{itemize}
-    \end{placeholder}
+\begin{itemize}
+    \item \textbf{Schema-driven validation}: YAML recipes are validated against a JSON Schema before job submission
+    \item \textbf{Strict vs soft checks}: blocking errors stop execution, while warnings highlight suboptimal configurations
+    \item \textbf{Service-aware rules}: validation adapts to the selected service (e.g.\ inference requires model and prompt length)
+    \item \textbf{Clear diagnostics}: precise, user-friendly error and warning messages with field-level context
+    \item \textbf{Reproducibility support}: schema versioning and validated defaults ensure consistent experiments
+\end{itemize}
 \end{frame}
+
 
 \begin{frame}{Slurm Integration}
     	\textbf{Recipe-Driven SLURM Job Setup}
@@ -864,25 +863,70 @@
 \section{Benchmarking}
 % ============================================================================
 
-\begin{frame}{Performance Analysis}
-    \begin{placeholder}{Laura's Benchmarking Results}
-        \textbf{Bottleneck Analysis:}
-        \begin{itemize}
-            \item Latency breakdown for LLM inference
-            \item GPU compute vs memory transfer
-            \item Network overhead measurements
-        \end{itemize}
+\begin{frame}{Performance Analysis: Ollama Setup}
+\begin{itemize}
+    \item Service: \textbf{Ollama (single-service deployment)}
+    \item Model: \texttt{llama2}
+    \item Execution time: \textbf{2 minutes}
+    \item Threads: \textbf{10}
+    \item Total requests: \textbf{57}
+\end{itemize}
+\end{frame}
 
-        \vspace{0.3cm}
-        \textbf{Scaling Analysis:}
-        \begin{itemize}
-            \item Single-node vs multi-node performance
-            \item Strong/weak scaling efficiency
-        \end{itemize}
+\begin{frame}{Performance Analysis: Ollama Results}
+\begin{center}
+\begin{tabular}{l c}
+\textbf{Metric} & \textbf{Value} \\
+\hline
+Average latency & 24.04 s \\
+P50 latency & 23.72 s \\
+P90 latency & 36.37 s \\
+P99 latency & 38.34 s \\
+Throughput & 0.38 req/s \\
+Errors & 0 \\
+\end{tabular}
+\end{center}
+\end{frame}
 
-        \vspace{0.3cm}
-        \textit{Include benchmark charts and graphs here}
-    \end{placeholder}
+\begin{frame}{Performance Analysis: Ollama Bottlenecks}
+\begin{itemize}
+    \item Latency dominated by \textbf{model inference time}
+    \item Limited batching and concurrency handling
+    \item Suitable for low-throughput, interactive use cases
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Performance Analysis: vLLM Distributed Setup}
+\begin{itemize}
+    \item Service: \textbf{vLLM Distributed (Ray-based)}
+    \item Deployment: \textbf{Multi-node GPU execution}
+    \item Job submission: \textbf{Successful}
+    \item SLURM job ID: \textbf{3944353}
+    \item Architecture: Single API endpoint, distributed workers
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Performance Analysis: Ollama vs vLLM}
+\begin{center}
+\begin{tabular}{l c c}
+\textbf{Aspect} & \textbf{Ollama} & \textbf{vLLM Distributed} \\
+\hline
+Deployment complexity & Low & High \\
+Latency focus & High latency & Optimized for batching \\
+Throughput & Low & High (expected) \\
+Scaling & Single-node & Multi-node \\
+Endpoint model & One per node & Single unified endpoint \\
+\end{tabular}
+\end{center}
+\end{frame}
+
+\begin{frame}{Performance Analysis: Key Takeaways}
+\begin{itemize}
+    \item Ollama provides a stable but latency-heavy baseline
+    \item Tail latency is a critical limitation for high load
+    \item vLLM distributed targets scalable, production-like inference
+    \item The framework supports both extremes with the same recipe model
+\end{itemize}
 \end{frame}
 
 % ============================================================================
