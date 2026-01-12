@@ -454,6 +454,53 @@
 
 
 % ============================================================================
+\section{Monitoring}
+% ============================================================================
+
+\begin{frame}{Monitoring Architecture}
+    \textbf{Prometheus + Grafana Stack}
+    \vspace{0.3cm}
+    \begin{itemize}
+        \item \textbf{Executors:} Expose metrics via HTTP endpoints (\texttt{/metrics/prometheus})
+        \item \textbf{Prometheus:} Time-series database, scrapes metrics periodically
+        \item \textbf{Grafana:} Visualization dashboards with custom panels
+        \item \textbf{Deployment:} Docker Compose for easy setup (local + HPC)
+    \end{itemize}
+    
+    \vspace{0.3cm}
+    \textbf{Key Metrics Collected:}
+    \begin{itemize}
+        \item Request count, errors, success rate
+        \item Latency (average, P50, P90, P99)
+        \item Throughput (requests per second)
+        \item System resources (CPU, memory, active threads)
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{MeluXina Integration}
+    \textbf{Challenge:} Compute nodes not directly accessible from outside
+    
+    \vspace{0.3cm}
+    \textbf{Solution:} Automated SSH tunneling
+    \begin{itemize}
+        \item \texttt{setup\_monitoring.sh} script identifies Slurm node allocation
+        \item Establishes SSH tunnels from login node to each executor endpoint
+        \item Makes metrics accessible to Prometheus
+        \item Handles cleanup when job completes
+    \end{itemize}
+    
+    \vspace{0.3cm}
+    \textbf{Dashboards:}
+    \begin{itemize}
+        \item \textbf{Ollama Dashboard:} API performance, response times
+        \item \textbf{vLLM Dashboard:} API endpoints, cluster performance
+    \end{itemize}
+    
+    \vspace{0.2cm}
+    \textit{Metrics collected after benchmark completion for analysis}
+\end{frame}
+
+% ============================================================================
 \section{Logging System}
 % ============================================================================
 

@@ -228,7 +228,7 @@ python3 src/benchmark/orchestrator.py \
 
 ### 4.2 Monitoring Metrics with CLI
 
-**Step 0: Put your correct meluxina user
+**Step 0: Put your correct meluxina user**
 ```bash
 USER=u103217 
 # or any of yours
@@ -243,8 +243,8 @@ cd monitoring && ./start.sh
 ```bash
 cd ../src
 python3 benchmark_cli.py run --recipe src/recipes/ollama_meluxina.yaml
-# Input: meluxina
-# Input: /mnt/tier2/users/$USER/ollama-test
+# Input cluster alias: meluxina
+# Input remote path: /mnt/tier2/users/u103217/ollama-test  # Use YOUR username
 # Note the Job ID from output
 ```
 
