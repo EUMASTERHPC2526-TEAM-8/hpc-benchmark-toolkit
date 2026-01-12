@@ -453,54 +453,365 @@
 \end{frame}
 
 
+
 % ============================================================================
 \section{Logging System}
 % ============================================================================
 
-\begin{frame}{Logging Architecture}
-    \begin{placeholder}{Giulia's Section}
-        \textbf{Overall Design:}
-        \begin{itemize}
-            \item Log sources and destinations
-            \item Aggregation strategy for distributed logs
-        \end{itemize}
-
-        \vspace{0.3cm}
-        \textbf{BaseLogCollector:}
-        \begin{itemize}
-            \item Abstract interface design
-            \item LogSource dataclass
-        \end{itemize}
-
-        \vspace{0.3cm}
-        \textbf{TailerLogCollector:}
-        \begin{itemize}
-            \item File tailing implementation
-            \item Remote node log collection
-        \end{itemize}
-    \end{placeholder}
+\begin{frame}{Logging System Overview}
+    \textbf{Purpose:} Aggregate distributed logs from multi-node HPC benchmarks
+    
+    \vspace{0.2cm}
+    \begin{center}
+    \begin{tikzpicture}[node distance=0.8cm, scale=1, every node/.style={scale=1}]
+        % Distributed sources
+        \node[server, minimum width=1.5cm, minimum height=0.6cm, font=\tiny] (s1) at (-2.5, 1.5) {Server 1};
+        \node[server, minimum width=1.5cm, minimum height=0.6cm, font=\tiny] (s2) at (-2.5, 0.5) {Server 2};
+        \node[client, minimum width=1.5cm, minimum height=0.6cm, font=\tiny] (c1) at (-2.5, -0.5) {Client 1};
+        \node[client, minimum width=1.5cm, minimum height=0.6cm, font=\tiny] (c2) at (-2.5, -1.5) {Client 2};
+        
+        % Log Collector
+        \node[component, minimum width=2.5cm, minimum height=1.5cm, fill=primary!20, font=\small] (collector) at (0.5, 0) {
+            \textbf{Log Collector}
+        };
+        
+        % Aggregated outputs
+        \node[component, minimum width=2cm, minimum height=0.5cm, font=\tiny, fill=success!10, draw=success] (out1) at (3.5, 1) {stdout.log};
+        \node[component, minimum width=2cm, minimum height=0.5cm, font=\tiny, fill=success!10, draw=success] (out2) at (3.5, 0) {stderr.log};
+        \node[component, minimum width=2cm, minimum height=0.5cm, font=\tiny, fill=success!10, draw=success] (out3) at (3.5, -1) {aggregated.jsonl};
+        
+        % Arrows
+        \draw[arrow, primary] (s1) -- (collector);
+        \draw[arrow, primary] (s2) -- (collector);
+        \draw[arrow, accent] (c1) -- (collector);
+        \draw[arrow, accent] (c2) -- (collector);
+        \draw[arrow, success] (collector) -- (out1);
+        \draw[arrow, success] (collector) -- (out2);
+        \draw[arrow, success] (collector) -- (out3);
+    \end{tikzpicture}
+    \end{center}
+    
+    \vspace{0.1cm}
+    \textbf{Key Features:} Multi-node aggregation, Structured JSON, Thread-based tailing
 \end{frame}
 
-\begin{frame}{Log Categories and Storage}
-    \begin{placeholder}{Giulia's Section}
-        \textbf{Log Categories:}
-        \begin{itemize}
-            \item Application logs
-            \item System logs (Slurm)
-            \item Benchmark logs
-            \item Infrastructure logs
-        \end{itemize}
-
-        \vspace{0.3cm}
-        \textbf{Log Format:}
-        \begin{itemize}
-            \item Structured logging (JSON)
-            \item Timestamps and correlation IDs
-            \item Storage organization
-            \item Retention policies
-        \end{itemize}
-    \end{placeholder}
+\begin{frame}{Architecture: Strategy Pattern}
+    \textbf{Design:} Abstract interface with pluggable implementations
+    
+    \vspace{0.2cm}
+    \begin{center}
+    \begin{tikzpicture}[node distance=1.5cm, scale=0.75, every node/.style={scale=0.75}]
+        % Abstract base
+        \node[component, minimum width=4cm, minimum height=2cm, fill=secondary!15, draw=secondary] (base) at (0, 2.5) {
+            \begin{tabular}{c}
+                \textbf{BaseLogCollector}\\
+                {\tiny (Abstract)}\\
+                \hline
+                {\tiny + deploy()}\\
+                {\tiny + start\_collection()}\\
+                {\tiny + is\_ready()}\\
+                {\tiny + stop\_collection()}
+            \end{tabular}
+        };
+        
+        % Concrete implementations - separated more
+        \node[component, minimum width=3cm, minimum height=1.3cm, fill=primary!15] (tailer) at (-2.5, 0) {
+            \begin{tabular}{c}
+                \textbf{TailerLogCollector}\\
+                {\tiny File tailing}\\
+                {\tiny Thread-based}
+            \end{tabular}
+        };
+        
+        \node[component, minimum width=3cm, minimum height=1.3cm, fill=gray!15, draw=gray] (future) at (2.5, 0) {
+            \begin{tabular}{c}
+                \textbf{FluentBitCollector}\\
+                {\tiny Future}
+            \end{tabular}
+        };
+        
+        % Factory - positioned lower to avoid overlap
+        \node[component, minimum width=3cm, minimum height=0.7cm, fill=warning!15, draw=warning, font=\small] (factory) at (0, -2) {
+            \textbf{LogCollectorFactory}
+        };
+        
+        % Inheritance arrows
+        \draw[thick, -{Triangle[open, length=6pt, width=5pt]}, secondary] (tailer.north) -- (base.south -| tailer);
+        \draw[thick, -{Triangle[open, length=6pt, width=5pt]}, gray] (future.north) -- (base.south -| future);
+        
+        % Factory arrows
+        \draw[arrow] (factory) -- (tailer);
+        \draw[arrow, dashed, gray] (factory) -- (future);
+    \end{tikzpicture}
+    \end{center}
 \end{frame}
+
+\begin{frame}{LogSource Dataclass}
+    \textbf{Purpose:} Structured representation of log sources
+    
+    \vspace{0.2cm}
+    \begin{center}
+    \begin{tikzpicture}[scale=0.85, every node/.style={scale=0.85}]
+        % Dataclass box
+        \node[component, minimum width=8cm, minimum height=2.8cm, fill=primary!10, text width=7.5cm, align=left, font=\scriptsize] (logSource) at (0, 0.5) {
+            \texttt{@dataclass}\\
+            \texttt{class LogSource:}\\[4pt]
+            \hspace{1em}\texttt{node: str}\\
+            \hspace{1em}\texttt{component: str}\\
+            \hspace{1em}\texttt{container\_name: str}
+        };
+        
+        % Example instance
+        \node[component, minimum width=7cm, minimum height=1.5cm, fill=success!10, draw=success, text width=6.5cm, align=left, font=\tiny] (example) at (0, -2.2) {
+            \textbf{Example:}\\
+            \texttt{LogSource(node="mel2120",}\\
+            \texttt{\ \ component="server",}\\
+            \texttt{\ \ container\_name="ollama\_0")}
+        };
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{BaseLogCollector Interface}
+    \textbf{Abstract Methods:} Contract for all implementations
+    
+    \vspace{0.2cm}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{tikzpicture}[scale=0.75, every node/.style={scale=0.75}]
+                \node[component, text width=4cm, minimum height=1.5cm, fill=primary!15] at (0,0) {
+                    \textbf{deploy(sources)}\\[2pt]
+                    {\tiny Prepare infrastructure}\\
+                    {\tiny Create output files}
+                };
+                
+                \node[component, text width=4cm, minimum height=1.5cm, fill=success!15, draw=success] at (0,-2) {
+                    \textbf{start\_collection()}\\[2pt]
+                    {\tiny Begin log capture}\\
+                    {\tiny Launch threads}
+                };
+            \end{tikzpicture}
+        \end{column}
+        
+        \begin{column}{0.48\textwidth}
+            \begin{tikzpicture}[scale=0.75, every node/.style={scale=0.75}]
+                \node[component, text width=4cm, minimum height=1.5cm, fill=warning!15, draw=warning] at (0,0) {
+                    \textbf{is\_ready()}\\[2pt]
+                    {\tiny Check readiness}\\
+                    {\tiny Verify flag files}
+                };
+                
+                \node[component, text width=4cm, minimum height=1.5cm, fill=accent!15, draw=accent] at (0,-2) {
+                    \textbf{stop\_collection()}\\[2pt]
+                    {\tiny Finalize outputs}\\
+                    {\tiny Return summary}
+                };
+            \end{tikzpicture}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{TailerLogCollector: 5-Phase Workflow}
+    \vspace{0.1cm}
+    \begin{center}
+    \begin{tikzpicture}[node distance=0.5cm, scale=1, every node/.style={scale=1}]
+        \node[component, minimum width=9cm, minimum height=0.7cm, fill=primary!15, text width=8.5cm, font=\scriptsize] (s1) at (0, 0) {
+            \textbf{1. Deploy:} Create stdout.log, stderr.log, aggregated.jsonl
+        };
+        
+        \node[component, minimum width=9cm, minimum height=0.7cm, fill=success!15, draw=success, text width=8.5cm, font=\scriptsize] (s2) at (0, -0.9) {
+            \textbf{2. Start:} Launch thread per source, create loggers\_ready flag
+        };
+        
+        \node[component, minimum width=9cm, minimum height=0.7cm, fill=warning!15, draw=warning, text width=8.5cm, font=\scriptsize] (s3) at (0, -1.8) {
+            \textbf{3. Tail:} Monitor log files, read new lines continuously
+        };
+        
+        \node[component, minimum width=9cm, minimum height=0.7cm, fill=accent!15, draw=accent, text width=8.5cm, font=\scriptsize] (s4) at (0, -2.7) {
+            \textbf{4. Process:} Add timestamp, node, component metadata
+        };
+        
+        \node[component, minimum width=9cm, minimum height=0.7cm, fill=secondary!15, draw=secondary, text width=8.5cm, font=\scriptsize] (s5) at (0, -3.6) {
+            \textbf{5. Stop:} Close files, return summary (line counts, paths)
+        };
+        
+        % Arrows
+        \draw[arrow, thick] (s1.south) -- (s2.north);
+        \draw[arrow, thick] (s2.south) -- (s3.north);
+        \draw[arrow, thick] (s3.south) -- (s4.north);
+        \draw[arrow, thick] (s4.south) -- (s5.north);
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Log Output Formats}
+    \vspace{0.5cm}
+    \begin{center}
+    \begin{tikzpicture}[scale=1, every node/.style={scale=1}]
+        % stdout.log
+        \node[component, minimum width=10cm, minimum height=1.4cm, fill=primary!10, text width=9.5cm, align=left, font=\tiny] (stdout) at (0, 1.5) {
+            \textbf{stdout.log} -- Plain text with metadata\\
+            \texttt{[2026-01-12T14:32:15Z] [mel2120] [server] Model loaded}
+        };
+        
+        % stderr.log
+        \node[component, minimum width=10cm, minimum height=1.4cm, fill=accent!10, draw=accent, text width=9.5cm, align=left, font=\tiny] (stderr) at (0, 0) {
+            \textbf{stderr.log} -- Error messages\\
+            \texttt{[2026-01-12T14:35:20Z] [mel2148] [client] Connection timeout}
+        };
+        
+        % aggregated.jsonl
+        \node[component, minimum width=10cm, minimum height=1.8cm, fill=success!10, draw=success, text width=9.5cm, align=left, font=\tiny] (jsonl) at (0, -1.7) {
+            \textbf{aggregated.jsonl} -- Structured JSON Lines\\
+            \texttt{\{"timestamp": "2026-01-12T14:32:15Z",}\\
+            \texttt{\ "node": "mel2120", "component": "server"\}}
+        };
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Configuration in Recipe}
+    \vspace{0.1cm}
+    \begin{center}
+    \begin{tikzpicture}[scale=1, every node/.style={scale=1}]
+        \node[component, minimum width=9cm, minimum height=4cm, fill=codebackground, draw=codeborder, text width=8.5cm, align=left, font=\ttfamily\tiny] at (0, 0.5) {
+            logging:\\
+            \hspace{1em}type: "tailer"\\
+            \hspace{1em}create\_jsonl: true\\
+            \hspace{1em}flush\_interval: 5\\[4pt]
+            \hspace{1em}outputs:\\
+            \hspace{2em}stdout: "stdout.log"\\
+            \hspace{2em}stderr: "stderr.log"\\
+            \hspace{2em}aggregated: "aggregated.jsonl"
+        };
+        
+        % Configuration explanations
+        \node[component, minimum width=4.5cm, minimum height=1cm, fill=primary!10, font=\tiny, text width=4cm, align=left] at (-4.5, -2.8) {
+            \textbf{type}: Collector type\\
+            \textbf{create\_jsonl}: JSON output\\
+            \textbf{flush\_interval}: Buffer time
+        };
+        
+        \node[component, minimum width=4cm, minimum height=1cm, fill=success!10, draw=success, font=\tiny, text width=3.5cm, align=left] at (0.5, -2.8) {
+            \textbf{outputs}: File paths\\
+            Relative to experiment dir
+        };
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Multi-Node Aggregation}
+    \textbf{Challenge:} Collect logs from distributed nodes into single files
+    
+    \vspace{0.2cm}
+    \begin{center}
+    \begin{tikzpicture}[node distance=0.8cm, scale=0.75, every node/.style={scale=0.75}]
+        % Timeline
+        \draw[thick, ->] (-4.5, 0) -- (4.5, 0);
+        \node at (5, 0) {\tiny time};
+        
+        % Node 1 logs
+        \node[server, minimum width=1.2cm, minimum height=0.5cm, font=\tiny] (n1) at (-3.5, 1.5) {mel2120};
+        \draw[arrow, primary] (-3, 1.3) -- (-2.5, 0.2);
+        \draw[arrow, primary] (-1.5, 1.3) -- (-0.5, 0.2);
+        \draw[arrow, primary] (0.5, 1.3) -- (1, 0.2);
+        
+        % Node 2 logs
+        \node[server, minimum width=1.2cm, minimum height=0.5cm, font=\tiny] (n2) at (-3.5, -1.5) {mel2148};
+        \draw[arrow, accent] (-2.5, -1.3) -- (-2, -0.2);
+        \draw[arrow, accent] (-0.5, -1.3) -- (0.5, -0.2);
+        \draw[arrow, accent] (1.5, -1.3) -- (2, -0.2);
+        
+        % Aggregated timeline
+        \node[component, minimum width=7.5cm, minimum height=0.8cm, fill=success!15, draw=success, font=\tiny] at (0.5, 0) {
+            Aggregated Timeline (chronological)
+        };
+        
+        % Result
+        \node[component, minimum width=2.5cm, minimum height=0.8cm, fill=primary!10, font=\tiny, align=center] at (3.5, 2) {
+            Single\\aggregated.jsonl
+        };
+        
+        \draw[arrow, thick, success] (2.5, 0.4) -- (2.8, 1.6);
+    \end{tikzpicture}
+    \end{center}
+    
+    \vspace{0.1cm}
+    \textbf{Solution:} Timestamps enable natural chronological merge
+\end{frame}
+
+\begin{frame}{Integration with Orchestrator}
+    \vspace{0.1cm}
+    \begin{center}
+    \begin{tikzpicture}[node distance=0.6cm, scale=1, every node/.style={scale=1}]
+        % Phase 1-3
+        \node[component, minimum width=8cm, minimum height=0.55cm, fill=gray!10, font=\tiny] (p1) at (0, 2.5) {Phase 1: Initialization};
+        \node[component, minimum width=8cm, minimum height=0.55cm, fill=gray!10, font=\tiny] (p2) at (0, 1.9) {Phase 2: Service Deployment};
+        
+        % Phase 3 - Logging starts
+        \node[component, minimum width=8cm, minimum height=0.75cm, fill=warning!20, draw=warning, font=\small] (p3) at (0, 1.1) {
+            \textbf{Phase 3:} Deploy \& Start Logging
+        };
+        
+        % Phase 4-5
+        \node[component, minimum width=8cm, minimum height=0.55cm, fill=gray!10, font=\tiny] (p4) at (0, 0.25) {Phase 4: Client Launch};
+        
+        \node[component, minimum width=8cm, minimum height=0.75cm, fill=success!15, draw=success, font=\small] (p5) at (0, -0.55) {
+            \textbf{Phase 5:} Continuous Log Capture
+        };
+        
+        % Phase 6 - Logging stops
+        \node[component, minimum width=8cm, minimum height=0.75cm, fill=accent!20, draw=accent, font=\small] (p6) at (0, -1.45) {
+            \textbf{Phase 6:} Stop \& Finalize Logs
+        };
+        
+        \node[component, minimum width=8cm, minimum height=0.55cm, fill=gray!10, font=\tiny] (p7) at (0, -2.2) {Phase 7: Report Generation};
+        
+        % Side annotations
+        \node[font=\tiny, text=warning] at (4.5, 1.1) {ready flag};
+        \node[font=\tiny, text=success] at (4.5, -0.55) {active};
+        \node[font=\tiny, text=accent] at (4.5, -1.45) {summary};
+    \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Validation and Testing}
+    \textbf{Comprehensive validation} ensures logging correctness
+    
+    \vspace{0.2cm}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \textbf{Automated Tests:}
+            \begin{itemize}
+                \item File existence
+                \item Content size
+                \item Line count
+                \item Format validation
+                \item Multi-node aggregation
+                \item Component coverage
+            \end{itemize}
+        \end{column}
+        
+        \begin{column}{0.48\textwidth}
+            \textbf{Test Script:}
+            \texttt{validate\_logging.sh}
+            
+            \vspace{0.2cm}
+            \begin{tikzpicture}[scale=0.85, every node/.style={scale=0.85}]
+                \node[component, minimum width=4cm, minimum height=2.5cm, fill=success!10, draw=success, text width=3.5cm, align=left, font=\tiny] at (0,0) {
+                    \textbf{Tests:}\\[2pt]
+                    ✓ 16 automated tests\\
+                    ✓ JSON validity\\
+                    ✓ Log distribution\\
+                    ✓ Timestamp format\\
+                    ✓ Multi-node check\\
+                    ✓ Line consistency
+                };
+            \end{tikzpicture}
+        \end{column}
+    \end{columns}
+\end{frame}
+
 
 % ============================================================================
 \section{Benchmarking}
