@@ -1216,55 +1216,589 @@ Please include:
 \section{Logging System}
 % ============================================================================
 
-\begin{placeholder}{Giulia's Section}
-Please provide comprehensive documentation of the logging system:
+\subsection{Overview}
 
-\subsection{Logging Architecture}
+The logging system provides comprehensive log aggregation and management across distributed HPC benchmark executions. It collects, aggregates, and stores logs from multiple nodes in a centralized, structured format suitable for analysis and debugging.
+
+\subsubsection{Design Goals}
+
+The logging system was designed with the following objectives:
+
 \begin{itemize}
-    \item Overall logging design
-    \item Log sources and destinations
-    \item Aggregation strategy
+    \item \textbf{Multi-Node Aggregation}: Collect logs from distributed server and client nodes into centralized files
+    \item \textbf{Structured Output}: Provide both human-readable and machine-parseable (JSON) log formats
+    \item \textbf{Extensibility}: Support multiple log collection implementations through abstract interfaces
+    \item \textbf{Real-Time Collection}: Capture logs continuously during benchmark execution
+    \item \textbf{Minimal Overhead}: Use lightweight file tailing to avoid performance impact
 \end{itemize}
 
-\subsection{BaseLogCollector}
-\begin{itemize}
-    \item Abstract interface design
-    \item LogSource dataclass
-    \item Method specifications
-\end{itemize}
+\subsection{Architecture}
 
-\subsection{TailerLogCollector}
-\begin{itemize}
-    \item File tailing implementation
-    \item Remote node log collection
-    \item Log aggregation
-\end{itemize}
+The logging system employs the Strategy pattern to provide a flexible, extensible architecture. Figure~\ref{fig:logging-architecture} illustrates the high-level architecture.
 
-\subsection{Log Categories}
-\begin{itemize}
-    \item Application logs
-    \item System logs (Slurm)
-    \item Benchmark logs
-    \item Infrastructure logs
-\end{itemize}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1cm, scale=0.8, every node/.style={scale=0.8}]
+    % Distributed sources
+    \node[server, minimum width=1.8cm, font=\scriptsize] (s1) at (-3, 2.5) {Server 1\\logs};
+    \node[server, minimum width=1.8cm, font=\scriptsize] (s2) at (-3, 1.2) {Server 2\\logs};
+    \node[client, minimum width=1.8cm, font=\scriptsize] (c1) at (-3, -0.1) {Client 1\\logs};
+    \node[client, minimum width=1.8cm, font=\scriptsize] (c2) at (-3, -1.4) {Client 2\\logs};
+    
+    % Log Collector
+    \node[component, minimum width=3cm, minimum height=2.2cm, fill=primary!20] (collector) at (0.5, 0.55) {
+        \textbf{Log Collector}\\[4pt]
+        {\scriptsize TailerLogCollector}
+    };
+    
+    % Aggregated outputs
+    \node[component, minimum width=2.2cm, minimum height=0.6cm, font=\scriptsize, fill=success!10, draw=success] (out1) at (4.2, 1.8) {stdout.log};
+    \node[component, minimum width=2.2cm, minimum height=0.6cm, font=\scriptsize, fill=success!10, draw=success] (out2) at (4.2, 0.55) {stderr.log};
+    \node[component, minimum width=2.2cm, minimum height=0.6cm, font=\scriptsize, fill=success!10, draw=success] (out3) at (4.2, -0.7) {aggregated.jsonl};
+    
+    % Arrows
+    \draw[arrow, primary] (s1) -- (collector);
+    \draw[arrow, primary] (s2) -- (collector);
+    \draw[arrow, accent] (c1) -- (collector);
+    \draw[arrow, accent] (c2) -- (collector);
+    \draw[arrow, success] (collector) -- (out1);
+    \draw[arrow, success] (collector) -- (out2);
+    \draw[arrow, success] (collector) -- (out3);
+\end{tikzpicture}
+\caption{Logging system architecture}
+\label{fig:logging-architecture}
+\end{figure}
 
-\subsection{Log Format and Storage}
-\begin{itemize}
-    \item Structured logging (JSON)
-    \item Timestamps and correlation IDs
-    \item Storage organization
-    \item Retention policies
-\end{itemize}
+\subsubsection{Strategy Pattern Implementation}
 
-Please include:
-\begin{itemize}
-    \item TikZ diagrams for log flow
-    \item Code snippets for key implementations
-    \item Example log entries
-    \item Integration with other components
-\end{itemize}
-\end{placeholder}
+The logging system uses the Strategy pattern to allow different log collection implementations while maintaining a consistent interface. Figure~\ref{fig:logging-strategy} shows the class hierarchy.
 
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1.5cm, scale=0.75, every node/.style={scale=0.75}]
+    % Abstract base
+    \node[component, minimum width=4.5cm, minimum height=2.3cm, fill=secondary!15, draw=secondary] (base) at (0, 2.8) {
+        \begin{tabular}{c}
+            \textbf{BaseLogCollector}\\
+            {\scriptsize (Abstract Base Class)}\\
+            \hline
+            {\scriptsize + deploy(sources)}\\
+            {\scriptsize + start\_collection()}\\
+            {\scriptsize + is\_ready()}\\
+            {\scriptsize + stop\_collection()}\\
+            {\scriptsize + parse\_collector\_config()}
+        \end{tabular}
+    };
+    
+    % Concrete implementations
+    \node[component, minimum width=3.5cm, minimum height=1.6cm, fill=primary!15] (tailer) at (-2.8, 0) {
+        \begin{tabular}{c}
+            \textbf{TailerLogCollector}\\[2pt]
+            {\scriptsize File tailing}\\
+            {\scriptsize Thread-based}\\
+            {\scriptsize JSON output}
+        \end{tabular}
+    };
+    
+    \node[component, minimum width=3.5cm, minimum height=1.6cm, fill=gray!15, draw=gray] (future) at (2.8, 0) {
+        \begin{tabular}{c}
+            \textbf{FluentBitCollector}\\[2pt]
+            {\scriptsize Future implementation}\\
+            {\scriptsize Agent-based}\\
+            {\scriptsize Advanced routing}
+        \end{tabular}
+    };
+    
+    % Factory
+    \node[component, minimum width=3.8cm, minimum height=0.85cm, fill=warning!15, draw=warning, font=\small] (factory) at (0, -2.3) {
+        \textbf{LogCollectorFactory}
+    };
+    
+    % Inheritance arrows
+    \draw[thick, -{Triangle[open, length=7pt, width=6pt]}, secondary] (tailer.north) -- (base.south -| tailer);
+    \draw[thick, -{Triangle[open, length=7pt, width=6pt]}, gray] (future.north) -- (base.south -| future);
+    
+    % Factory arrows
+    \draw[arrow] (factory) -- (tailer);
+    \draw[arrow, dashed, gray] (factory) -- (future);
+\end{tikzpicture}
+\caption{Strategy pattern in logging system}
+\label{fig:logging-strategy}
+\end{figure}
+
+\subsection{Core Components}
+
+\subsubsection{LogSource Dataclass}
+
+The \texttt{LogSource} dataclass provides a structured representation of a single log source:
+
+\begin{lstlisting}[style=python, caption={LogSource dataclass definition}]
+@dataclass
+class LogSource:
+    """
+    Represents a single source of logs to collect.
+    
+    Attributes:
+        node: Node hostname where logs are generated
+        component: Type of component ("server", "client", "monitor")
+        container_name: Name/ID of the container producing logs
+    """
+    node: str
+    component: str
+    container_name: str
+\end{lstlisting}
+
+Example usage:
+
+\begin{lstlisting}[style=python, caption={LogSource example}]
+# Create a log source for a server node
+log_source = LogSource(
+    node="mel2120",
+    component="server",
+    container_name="ollama_0"
+)
+
+# Create a log source for a client node
+client_source = LogSource(
+    node="mel2148",
+    component="client",
+    container_name="python_executor_1"
+)
+\end{lstlisting}
+
+\subsubsection{BaseLogCollector Interface}
+
+The \texttt{BaseLogCollector} abstract class defines the interface that all log collector implementations must follow:
+
+\begin{lstlisting}[style=python, caption={BaseLogCollector abstract methods}]
+class BaseLogCollector(ABC):
+    """Abstract base class for managing log collection operations."""
+    
+    @abstractmethod
+    def deploy(self, sources: List[LogSource]) -> bool:
+        """
+        Deploy log collection infrastructure.
+        
+        Args:
+            sources: List of log sources to collect from
+            
+        Returns:
+            True if deployment succeeded, False otherwise
+        """
+        pass
+    
+    @abstractmethod
+    def start_collection(self) -> bool:
+        """
+        Start collecting logs from all deployed sources.
+        
+        Returns:
+            True if collection started successfully
+        """
+        pass
+    
+    @abstractmethod
+    def is_ready(self) -> bool:
+        """
+        Check if log collector is ready to collect logs.
+        
+        Returns:
+            True if ready, False otherwise
+        """
+        pass
+    
+    @abstractmethod
+    def stop_collection(self) -> Dict[str, Any]:
+        """
+        Stop log collection and finalize outputs.
+        
+        Returns:
+            Dictionary with collection summary/metadata
+        """
+        pass
+\end{lstlisting}
+
+\subsection{TailerLogCollector Implementation}
+
+The \texttt{TailerLogCollector} provides a lightweight, thread-based implementation that tails log files and aggregates them into centralized outputs.
+
+\subsubsection{Architecture}
+
+The TailerLogCollector operates in five distinct phases:
+
+\begin{enumerate}
+    \item \textbf{Deploy Phase}: Create output files (stdout.log, stderr.log, aggregated.jsonl)
+    \item \textbf{Start Phase}: Launch one thread per log source, create "loggers\_ready" flag
+    \item \textbf{Tail Phase}: Each thread monitors its log file, reading new lines continuously
+    \item \textbf{Process Phase}: Add timestamp, node, and component metadata to each log line
+    \item \textbf{Stop Phase}: Stop threads, close files, return summary with line counts and file paths
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.7cm, scale=0.85, every node/.style={scale=0.85}]
+    \node[component, minimum width=10cm, minimum height=0.8cm, fill=primary!15, text width=9.5cm, font=\scriptsize] (s1) at (0, 0) {
+        \textbf{1. Deploy:} Create stdout.log, stderr.log, aggregated.jsonl
+    };
+    
+    \node[component, minimum width=10cm, minimum height=0.8cm, fill=success!15, draw=success, text width=9.5cm, font=\scriptsize] (s2) at (0, -1) {
+        \textbf{2. Start:} Launch thread per source, create loggers\_ready flag
+    };
+    
+    \node[component, minimum width=10cm, minimum height=0.8cm, fill=warning!15, draw=warning, text width=9.5cm, font=\scriptsize] (s3) at (0, -2) {
+        \textbf{3. Tail:} Monitor log files, read new lines continuously
+    };
+    
+    \node[component, minimum width=10cm, minimum height=0.8cm, fill=accent!15, draw=accent, text width=9.5cm, font=\scriptsize] (s4) at (0, -3) {
+        \textbf{4. Process:} Add timestamp, node, component metadata
+    };
+    
+    \node[component, minimum width=10cm, minimum height=0.8cm, fill=secondary!15, draw=secondary, text width=9.5cm, font=\scriptsize] (s5) at (0, -4) {
+        \textbf{5. Stop:} Close files, return summary (line counts, paths)
+    };
+    
+    % Arrows
+    \draw[arrow, thick] (s1.south) -- (s2.north);
+    \draw[arrow, thick] (s2.south) -- (s3.north);
+    \draw[arrow, thick] (s3.south) -- (s4.north);
+    \draw[arrow, thick] (s4.south) -- (s5.north);
+\end{tikzpicture}
+\caption{TailerLogCollector workflow}
+\end{figure}
+
+\subsubsection{Configuration}
+
+TailerLogCollector is configured via the recipe YAML file:
+
+\begin{lstlisting}[style=yaml, caption={TailerLogCollector configuration in recipe}]
+logging:
+  type: "tailer"
+  create_jsonl: true
+  flush_interval: 5
+  
+  outputs:
+    stdout: "stdout.log"
+    stderr: "stderr.log"
+    aggregated: "aggregated.jsonl"
+\end{lstlisting}
+
+Configuration parameters:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}llp{8cm}@{}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
+\midrule
+type & "tailer" & Collector implementation type \\
+create\_jsonl & true & Enable structured JSON output \\
+flush\_interval & 5 & Buffer flush interval in seconds \\
+outputs.stdout & "stdout.log" & Path for stdout aggregation \\
+outputs.stderr & "stderr.log" & Path for stderr aggregation \\
+outputs.aggregated & "aggregated.jsonl" & Path for JSON Lines output \\
+\bottomrule
+\end{tabular}
+\caption{TailerLogCollector configuration parameters}
+\end{table}
+
+\subsubsection{Implementation Details}
+
+\textbf{Thread-Based Tailing:}
+
+\begin{lstlisting}[style=python, caption={Thread-based log tailing implementation}]
+def _tail_log_file(self, source: LogSource, log_file: Path):
+    """Tail a log file and write to aggregated outputs."""
+    print(f"Starting tail for {log_file}")
+    
+    # Wait for file to exist
+    while not log_file.exists() and not self.stop_event.is_set():
+        time.sleep(1)
+    
+    if self.stop_event.is_set():
+        return
+    
+    try:
+        with open(log_file, 'r') as f:
+            while not self.stop_event.is_set():
+                line = f.readline()
+                
+                if line:
+                    self._process_log_line(source, line.rstrip('\n'))
+                else:
+                    time.sleep(0.1)
+                    
+    except Exception as e:
+        print(f"Error tailing {log_file}: {e}")
+\end{lstlisting}
+
+\textbf{Log Line Processing:}
+
+\begin{lstlisting}[style=python, caption={Log line processing with metadata}]
+def _process_log_line(self, source: LogSource, line: str):
+    """Process a single log line from a source."""
+    try:
+        timestamp = datetime.utcnow().isoformat() + 'Z'
+        
+        # Write to aggregated stdout with metadata
+        log_entry = f"[{timestamp}] [{source.node}] [{source.component}] {line}\n"
+        self.stdout_handle.write(log_entry)
+        
+        # Write to structured .jsonl
+        if self.create_jsonl and self.jsonl_handle:
+            jsonl_entry = {
+                "timestamp": timestamp,
+                "node": source.node,
+                "component": source.component,
+                "message": line
+            }
+            self.jsonl_handle.write(json.dumps(jsonl_entry) + '\n')
+            
+    except Exception as e:
+        print(f"Error processing log line: {e}")
+\end{lstlisting}
+
+\subsection{Log Output Formats}
+
+The logging system produces three output files, each serving a different purpose:
+
+\subsubsection{stdout.log - Plain Text with Metadata}
+
+Human-readable format with timestamp, node, and component prefixes:
+
+\begin{lstlisting}[style=bash, caption={stdout.log example}]
+[2026-01-12T14:32:15Z] [mel2120] [server] Model loaded successfully
+[2026-01-12T14:32:16Z] [mel2148] [client] Started 100 worker threads
+[2026-01-12T14:32:17Z] [mel2120] [server] Ready to accept connections
+[2026-01-12T14:32:18Z] [mel2148] [client] Benchmark warmup phase started
+\end{lstlisting}
+
+\subsubsection{stderr.log - Error Messages}
+
+Contains error messages and warnings (typically empty for successful runs):
+
+\begin{lstlisting}[style=bash, caption={stderr.log example}]
+[2026-01-12T14:35:20Z] [mel2148] [client] Connection timeout to server
+[2026-01-12T14:35:21Z] [mel2148] [client] Retrying connection (attempt 2/3)
+\end{lstlisting}
+
+\subsubsection{aggregated.jsonl - Structured JSON Lines}
+
+Machine-parseable format for automated analysis:
+
+\begin{lstlisting}[style=python, caption={aggregated.jsonl example}]
+{"timestamp": "2026-01-12T14:32:15Z", "node": "mel2120", "component": "server", "message": "Model loaded successfully"}
+{"timestamp": "2026-01-12T14:32:16Z", "node": "mel2148", "component": "client", "message": "Started 100 worker threads"}
+{"timestamp": "2026-01-12T14:32:17Z", "node": "mel2120", "component": "server", "message": "Ready to accept connections"}
+\end{lstlisting}
+
+\subsection{Multi-Node Log Aggregation}
+
+One of the key challenges in HPC benchmarking is collecting logs from distributed nodes and merging them into a coherent timeline. The logging system achieves this through timestamp-based aggregation.
+
+\subsubsection{Aggregation Strategy}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1cm, scale=0.7, every node/.style={scale=0.7}]
+    % Timeline
+    \draw[thick, ->] (-5.5, 0) -- (5.5, 0);
+    \node at (6, 0) {\scriptsize time};
+    
+    % Node 1 logs
+    \node[server, minimum width=1.5cm, minimum height=0.6cm, font=\scriptsize] (n1) at (-4.5, 2) {mel2120};
+    \draw[arrow, primary] (-4, 1.7) -- (-3.2, 0.25);
+    \draw[arrow, primary] (-2.5, 1.7) -- (-1.2, 0.25);
+    \draw[arrow, primary] (-0.5, 1.7) -- (0.8, 0.25);
+    \draw[arrow, primary] (1.5, 1.7) -- (2.5, 0.25);
+    
+    % Node 2 logs
+    \node[server, minimum width=1.5cm, minimum height=0.6cm, font=\scriptsize] (n2) at (-4.5, -2) {mel2148};
+    \draw[arrow, accent] (-3.5, -1.7) -- (-2.8, -0.25);
+    \draw[arrow, accent] (-1.8, -1.7) -- (-0.5, -0.25);
+    \draw[arrow, accent] (0.2, -1.7) -- (1.5, -0.25);
+    \draw[arrow, accent] (2.2, -1.7) -- (3.2, -0.25);
+    
+    % Aggregated timeline
+    \node[component, minimum width=9.5cm, minimum height=0.9cm, fill=success!15, draw=success, font=\scriptsize] at (0, 0) {
+        Aggregated Timeline (chronological order by timestamp)
+    };
+    
+    % Result
+    \node[component, minimum width=2.8cm, minimum height=0.9cm, fill=primary!10, font=\scriptsize, align=center] at (4.5, 2.8) {
+        Single\\aggregated.jsonl
+    };
+    
+    \draw[arrow, thick, success] (3, 0.5) -- (3.5, 2.3);
+\end{tikzpicture}
+\caption{Multi-node log aggregation with timestamps}
+\end{figure}
+
+Each thread writes logs with timestamps, enabling natural chronological merging. The aggregated files maintain temporal order across all nodes without requiring complex synchronization.
+
+\subsection{Integration with Orchestrator}
+
+The logging system integrates seamlessly into the seven-phase benchmark execution model:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}llp{8cm}@{}}
+\toprule
+\textbf{Phase} & \textbf{Logging Action} & \textbf{Description} \\
+\midrule
+1. Initialization & -- & Logging system is initialized \\
+2. Service Deployment & -- & Log sources are identified \\
+3. Monitoring Setup & \textbf{Deploy \& Start} & Log collector deploys and starts collection \\
+4. Client Launch & -- & Client logs begin flowing \\
+5. Execution & \textbf{Active Collection} & Continuous log capture during benchmark \\
+6. Teardown & \textbf{Stop \& Finalize} & Collection stops, files closed, summary returned \\
+7. Report Generation & -- & Logs available for analysis \\
+\bottomrule
+\end{tabular}
+\caption{Logging system integration with execution phases}
+\end{table}
+
+\subsubsection{Orchestrator Integration Code}
+
+\begin{lstlisting}[style=python, caption={Logging integration in orchestrator}]
+# Phase 3: Monitoring Setup - Deploy logging
+log_sources = [
+    LogSource(node=node, component="server", container_name=f"ollama_{i}")
+    for i, node in enumerate(server_nodes)
+]
+log_sources += [
+    LogSource(node=node, component="client", container_name=f"client_{i}")
+    for i, node in enumerate(client_nodes)
+]
+
+log_collector = LogCollectorFactory.create(
+    collector_type="tailer",
+    config=logging_config,
+    output_dir=experiment_dir
+)
+
+# Deploy and start collection
+log_collector.deploy(log_sources)
+log_collector.start_collection()
+
+# Wait for ready flag
+while not log_collector.is_ready():
+    time.sleep(1)
+
+# ... benchmark execution ...
+
+# Phase 6: Teardown - Stop logging
+summary = log_collector.stop_collection()
+print(f"Collected {summary['stdout_lines']} log lines")
+\end{lstlisting}
+
+\subsection{Validation and Testing}
+
+A comprehensive validation script ensures logging correctness across distributed executions.
+
+\subsubsection{Automated Tests}
+
+The \texttt{validate\_logging.sh} script performs 16 automated tests:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lp{10cm}@{}}
+\toprule
+\textbf{Test Category} & \textbf{Tests Performed} \\
+\midrule
+File Existence & Verify stdout.log, stderr.log, aggregated.jsonl exist \\
+File Size & Verify files have content (>0 bytes) \\
+Content Validation & Check line counts (>50 lines expected) \\
+Format Validation & Verify timestamp format, JSON validity \\
+Multi-Node Aggregation & Verify logs from multiple nodes present \\
+Component Coverage & Verify both server and client logs present \\
+Line Count Consistency & Compare stdout and jsonl line counts \\
+\bottomrule
+\end{tabular}
+\caption{Automated logging validation tests}
+\end{table}
+
+\subsubsection{Validation Script Example}
+
+\begin{lstlisting}[style=bash, caption={Validation script usage}]
+#!/bin/bash
+# Run validation on experiment directory
+./validate_logging.sh experiments/logging-test_20251228_123456
+
+# Output example:
+# [1] Testing: stdout.log exists... PASS
+# [2] Testing: stderr.log exists... PASS
+# [3] Testing: aggregated.jsonl exists... PASS
+# [4] Testing: loggers_ready flag exists... PASS
+# [5] Testing: stdout.log has content... PASS
+# [6] Testing: aggregated.jsonl has content... PASS
+# [7] Testing: stdout.log line count (>50 expected)...
+#     Lines: 1247
+#     PASS
+# [8] Testing: aggregated.jsonl line count (>50 expected)...
+#     Lines: 1247
+#     PASS
+# ...
+# Total tests: 16
+# Passed: 16
+# Failed: 0
+# ALL TESTS PASSED!
+\end{lstlisting}
+
+\subsection{Log Analysis Tools}
+
+The structured JSON format enables automated log analysis:
+
+\begin{lstlisting}[style=python, caption={Log analysis example}]
+import json
+from collections import Counter
+from datetime import datetime
+
+# Analyze log distribution
+def analyze_logs(jsonl_file):
+    with open(jsonl_file) as f:
+        logs = [json.loads(line) for line in f]
+    
+    # Count by node
+    node_counts = Counter(log['node'] for log in logs)
+    
+    # Count by component
+    component_counts = Counter(log['component'] for log in logs)
+    
+    # Timeline analysis
+    timestamps = [datetime.fromisoformat(log['timestamp'].rstrip('Z')) 
+                  for log in logs]
+    duration = (max(timestamps) - min(timestamps)).total_seconds()
+    
+    return {
+        'total_logs': len(logs),
+        'nodes': dict(node_counts),
+        'components': dict(component_counts),
+        'duration_seconds': duration,
+        'logs_per_second': len(logs) / duration if duration > 0 else 0
+    }
+
+# Example output:
+# {
+#   'total_logs': 1247,
+#   'nodes': {'mel2120': 623, 'mel2148': 624},
+#   'components': {'server': 623, 'client': 624},
+#   'duration_seconds': 125.3,
+#   'logs_per_second': 9.95
+# }
+\end{lstlisting}
+
+\subsection{Future Enhancements}
+
+Potential enhancements to the logging system include:
+
+\begin{itemize}
+    \item \textbf{FluentBitCollector}: Agent-based log collection with advanced routing capabilities
+    \item \textbf{Log Compression}: Automatic compression of log files to save storage space
+    \item \textbf{Real-Time Streaming}: Stream logs to centralized logging services (e.g., Elasticsearch)
+    \item \textbf{Log Filtering}: Filter logs by severity level or component type
+    \item \textbf{Automatic Alerting}: Trigger alerts based on error patterns in logs
+    \item \textbf{Log Retention Policies}: Automatic archiving or deletion of old logs
+\end{itemize}
 % ============================================================================
 \section{CLI and User Interface}
 % ============================================================================
