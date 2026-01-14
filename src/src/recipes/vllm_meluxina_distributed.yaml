@@ -20,7 +20,7 @@ orchestration:
     clients:
       nodes: 2  # 2 client nodes
   job_config:
-    time_limit: "00:30:00"  # 30 minutes for testing
+    time_limit: "01:00:00"  # 1 hour limit
     exclusive: true
 
 resources:

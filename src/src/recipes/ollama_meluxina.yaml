@@ -21,7 +21,7 @@ orchestration:
     monitors:
       nodes: 1
   job_config:
-    time_limit: "02:00:00"
+    time_limit: "01:00:00"
     exclusive: true
 
 resources:
