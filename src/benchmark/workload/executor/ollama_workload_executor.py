@@ -97,6 +97,16 @@ class OllamaWorkloadExecutor(BaseWorkloadExecutor):
 
         print(f"[Thread {thread_id}] Running benchmark for {duration_seconds} seconds...", flush=True)
 
+        # Initialize per-thread metrics tracking
+        with self.metrics_lock:
+            self.per_thread_metrics[thread_id] = {
+                "requests": 0,
+                "errors": 0,
+                "total_latency": 0.0,
+                "elapsed": 0.0,
+                "latencies": []
+            }
+
         # Simple round-robin load generation with random prompts
         # Offset server_idx by thread_id to distribute load
         server_idx = thread_id
@@ -122,6 +132,16 @@ class OllamaWorkloadExecutor(BaseWorkloadExecutor):
                     request_count += 1
                     total_latency += request_latency
                     latencies.append(request_latency)
+                    
+                    # Update per-thread metrics for real-time monitoring
+                    with self.metrics_lock:
+                        self.per_thread_metrics[thread_id] = {
+                            "requests": request_count,
+                            "errors": error_count,
+                            "total_latency": total_latency,
+                            "elapsed": time.time() - start_time,
+                            "latencies": latencies.copy()
+                        }
                 else:
                     error_count += 1
                     print(f"[Thread {thread_id}] Request failed: HTTP {res.status_code}")

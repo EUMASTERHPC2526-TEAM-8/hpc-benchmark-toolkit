@@ -89,6 +89,7 @@ class VllmWorkloadExecutor(BaseWorkloadExecutor):
         request_count = 0
         error_count = 0
         total_latency = 0.0
+        latencies = []  # Track individual latencies for percentile calculation
         start_time = time.time()
 
         # Parse duration (simplified - assumes format like "10m", "2h", "300s")
@@ -96,6 +97,16 @@ class VllmWorkloadExecutor(BaseWorkloadExecutor):
         end_time = start_time + duration_seconds
 
         print(f"[Thread {thread_id}] Running benchmark for {duration_seconds} seconds...", flush=True)
+
+        # Initialize per-thread metrics tracking
+        with self.metrics_lock:
+            self.per_thread_metrics[thread_id] = {
+                "requests": 0,
+                "errors": 0,
+                "total_latency": 0.0,
+                "elapsed": 0.0,
+                "latencies": []
+            }
 
         # Simple round-robin load generation with random prompts
         # Offset server_idx by thread_id to distribute load
@@ -126,6 +137,17 @@ class VllmWorkloadExecutor(BaseWorkloadExecutor):
                 if 200 <= res.status_code < 300:
                     request_count += 1
                     total_latency += request_latency
+                    latencies.append(request_latency)
+                    
+                    # Update per-thread metrics for real-time monitoring
+                    with self.metrics_lock:
+                        self.per_thread_metrics[thread_id] = {
+                            "requests": request_count,
+                            "errors": error_count,
+                            "total_latency": total_latency,
+                            "elapsed": time.time() - start_time,
+                            "latencies": latencies.copy()
+                        }
                 else:
                     error_count += 1
                     print(f"[Thread {thread_id}] Request failed: HTTP {res.status_code}")
@@ -150,6 +172,7 @@ class VllmWorkloadExecutor(BaseWorkloadExecutor):
             "errors": error_count,
             "elapsed_seconds": elapsed_time,
             "total_latency": total_latency,  # This will be summed for avg calculation
+            "latencies": latencies,  # Individual latencies for percentile calculation
         }
 
     def _ensure_datasets_installed(self):

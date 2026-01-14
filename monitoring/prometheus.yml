@@ -56,6 +56,15 @@ scrape_configs:
     scrape_interval: 5s
     scrape_timeout: 5s
 
+  # Local demo: scrape dummy executor on macOS host (port 5001)
+  - job_name: 'local-dummy'
+    metrics_path: '/metrics/prometheus'
+    static_configs:
+      - targets:
+        - 'host.docker.internal:5001'
+    scrape_interval: 5s
+    scrape_timeout: 5s
+
   # Optional: Direct scrape from compute nodes (only if network-accessible)
   # Usually not possible in HPC due to firewall
   # - job_name: 'hpc-nodes-direct'

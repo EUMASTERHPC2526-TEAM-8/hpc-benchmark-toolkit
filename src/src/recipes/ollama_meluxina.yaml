@@ -38,22 +38,22 @@ workload:
   component: "inference"
   service: "ollama"
   clients_per_node: 10
-  duration: "2m"
-  warmup: "1m"
+  duration: "15m"
+  warmup: "2m"
   model: "llama2"
   benchmark_suite:
     - name: latency_c1
-      duration: "2m"
+      duration: "15m"
       num_threads: 1
       sleep_seconds: 0.05
 
     - name: latency_c10
-      duration: "2m"
+      duration: "15m"
       num_threads: 10
       sleep_seconds: 0.01
 
     - name: throughput_c10_nosleep
-      duration: "2m"
+      duration: "15m"
       num_threads: 10
       sleep_seconds: 0.0
 

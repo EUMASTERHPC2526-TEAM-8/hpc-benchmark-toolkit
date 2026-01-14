@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from flask import Flask, jsonify, request, Response
 from typing import Dict, Any, Optional, List
 import threading
+import time
 
 class BaseWorkloadExecutor(ABC):
     """
@@ -42,6 +43,15 @@ class BaseWorkloadExecutor(ABC):
         # Thread-safe metrics collection
         self.metrics_lock = threading.Lock()
         self.thread_metrics: List[Dict[str, Any]] = []
+        
+        # Per-thread current metrics (updated during execution by worker threads)
+        # Structure: {thread_id: {requests, errors, latencies, elapsed, total_latency}}
+        self.per_thread_metrics: Dict[int, Dict[str, Any]] = {}
+        
+        # Real-time metrics snapshots (for live monitoring)
+        self.snapshots: List[Dict[str, Any]] = []
+        self.monitoring_thread: Optional[threading.Thread] = None
+        self.monitoring_active = False
 
         # Shared resources for workload execution
         self.shared_resources: Dict[str, Any] = {}
@@ -154,15 +164,42 @@ class BaseWorkloadExecutor(ABC):
 
         New flow:
         1. Prepare shared benchmark state (hook _prepare_shared_resources)
-        2. Spawn N worker threads that run _run_benchmark
-        3. Join threads and aggregate metrics
+        2. Start background monitoring thread (real-time metrics)
+        3. Spawn N worker threads that run _run_benchmark
+        4. Join threads and aggregate final metrics
+        5. Stop monitoring thread
         """
         try:
             num_threads = int(workload_config.get("num_threads", workload_config.get("clients_per_node", 1)))
             print(f"Starting benchmark with {num_threads} threads.")
 
+            # Initialize shared metric structures
+            with self.metrics_lock:
+                self.metrics = {
+                    "total_requests": 0,
+                    "errors": 0,
+                    "elapsed_seconds": 0,
+                    "avg_latency": 0,
+                    "p50_latency": 0,
+                    "p90_latency": 0,
+                    "p99_latency": 0,
+                    "throughput": 0,
+                    "num_threads": num_threads
+                }
+                self.per_thread_metrics = {}
+                self.thread_metrics = []
+                self.snapshots = []
+
             # Prepare shared resources once before spawning threads (can be overridden by subclasses)
             self._prepare_shared_resources(workload_config)
+
+            # Start background monitoring thread for real-time metrics
+            self.monitoring_active = True
+            self.monitoring_thread = threading.Thread(
+                target=self._metrics_monitoring_loop,
+                daemon=True
+            )
+            self.monitoring_thread.start()
 
             threads = []
 
@@ -193,12 +230,18 @@ class BaseWorkloadExecutor(ABC):
             for t in threads:
                 t.join()
 
+            # Stop monitoring thread
+            self.monitoring_active = False
+            if self.monitoring_thread and self.monitoring_thread.is_alive():
+                self.monitoring_thread.join(timeout=5)
+
             # Aggregate metrics from all threads
             self._aggregate_metrics(workload_config)
 
         except Exception as e:
             self.workload_error = str(e)
             print(f"Workload execution error: {e}")
+            self.monitoring_active = False
         finally:
             self.workload_running = False
 
@@ -311,6 +354,57 @@ class BaseWorkloadExecutor(ABC):
             **{k: v for k, v in workload_config.items() if k in ["model", "duration"]}
         }
 
+    def _metrics_monitoring_loop(self):
+        """Background thread that snapshots metrics during execution."""
+        while self.monitoring_active:
+            time.sleep(5)
+            self._snapshot_current_metrics()
+
+    def _snapshot_current_metrics(self):
+        """Snapshot current per-thread metrics into aggregated self.metrics."""
+        with self.metrics_lock:
+            if not self.per_thread_metrics:
+                return
+
+            total_requests = 0
+            total_errors = 0
+            total_latency = 0.0
+            max_elapsed = 0.0
+            all_latencies = []
+
+            for _, tdata in self.per_thread_metrics.items():
+                total_requests += tdata.get("requests", 0)
+                total_errors += tdata.get("errors", 0)
+                total_latency += tdata.get("total_latency", 0.0)
+                max_elapsed = max(max_elapsed, tdata.get("elapsed", 0.0))
+                all_latencies.extend(tdata.get("latencies", []))
+
+            avg_latency = total_latency / total_requests if total_requests > 0 else 0
+            throughput = total_requests / max_elapsed if max_elapsed > 0 else 0
+
+            # simple percentiles
+            p50 = p90 = p99 = 0
+            if all_latencies:
+                all_latencies.sort()
+                n = len(all_latencies)
+                p50 = all_latencies[int(n * 0.50)] if n else 0
+                p90 = all_latencies[int(n * 0.90)] if n else 0
+                p99 = all_latencies[int(n * 0.99)] if n else 0
+
+            self.metrics.update({
+                "total_requests": total_requests,
+                "errors": total_errors,
+                "elapsed_seconds": max_elapsed,
+                "avg_latency_seconds": avg_latency,
+                "p50_latency_seconds": p50,
+                "p90_latency_seconds": p90,
+                "p99_latency_seconds": p99,
+                "throughput_rps": throughput,
+                "num_threads": len(self.per_thread_metrics),
+            })
+
+            self.snapshots.append({"timestamp": time.time(), **self.metrics})
+
     def get_service_name(self) -> str:
         """
         Get the name of the service this executor handles.
@@ -319,6 +413,27 @@ class BaseWorkloadExecutor(ABC):
             Service name (e.g., "ollama", "postgres")
         """
         return self.__class__.__name__.replace("WorkloadExecutor", "").lower()
+
+    def _parse_duration(self, duration: str) -> int:
+        """
+        Parse duration string to seconds.
+
+        Args:
+            duration: Duration string (e.g., "10m", "2h", "300s")
+
+        Returns:
+            Duration in seconds
+        """
+        duration = duration.strip()
+        if duration.endswith('s'):
+            return int(duration[:-1])
+        elif duration.endswith('m'):
+            return int(duration[:-1]) * 60
+        elif duration.endswith('h'):
+            return int(duration[:-1]) * 3600
+        else:
+            # Default to treating as seconds
+            return int(duration)
 
     def _metrics_prometheus_format(self) -> str:
         """
