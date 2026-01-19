@@ -514,6 +514,54 @@ class BenchmarkCLI:
             print(f"    ✗ Failed to submit job: {e}")
             return
 
+    def view_logs(self, job_id: Optional[str] = None):
+        """View logs for a job"""
+        cluster = self._prompt("Cluster SSH alias (e.g., meluxina)", required=True)
+        
+        if not job_id:
+            job_id = self._prompt("Job ID", required=True)
+        
+        # Get job info to find log path
+        print(f"\n--- Fetching logs for job {job_id} ---")
+        
+        try:
+            # Get job stdout path
+            result = subprocess.run([
+                "ssh", cluster,
+                f"scontrol show job {job_id} | grep StdOut | awk -F'=' '{{print $2}}'"
+            ], check=True, capture_output=True, text=True)
+            
+            log_path = result.stdout.strip()
+            
+            if not log_path:
+                print(f"✗ Could not find log path for job {job_id}")
+                return
+            
+            # Ask for number of lines
+            lines = self._prompt_int("Number of lines to show", 100)
+            
+            # Show logs
+            print(f"\nShowing last {lines} lines of {log_path}:\n")
+            print("=" * 80)
+            
+            result = subprocess.run([
+                "ssh", cluster, f"tail -{lines} '{log_path}'"
+            ], check=True, capture_output=True, text=True)
+            
+            print(result.stdout)
+            print("=" * 80)
+            
+            # Ask if user wants to follow logs
+            follow = input("\nFollow logs? (y/n): ").strip().lower()
+            if follow == 'y':
+                print(f"Following logs (Ctrl+C to stop)...\n")
+                subprocess.run(["ssh", cluster, f"tail -f '{log_path}'"])
+                
+        except subprocess.CalledProcessError as e:
+            print(f"✗ Failed to fetch logs: {e}")
+        except KeyboardInterrupt:
+            print("\n\nStopped following logs.")
+
 
 def main():
     """Main CLI entry point"""
@@ -533,6 +581,9 @@ Examples:
 
   # Deploy a specific recipe
   %(prog)s run --recipe src/recipes/ollama_meluxina.yaml
+
+  # View logs for a job
+  %(prog)s logs --job-id 4103121
         """
     )
 
@@ -548,6 +599,10 @@ Examples:
     run_parser = subparsers.add_parser('run', help='Deploy and run a recipe')
     run_parser.add_argument('--recipe', type=str, help='Path to recipe file')
 
+    # Logs command
+    logs_parser = subparsers.add_parser('logs', help='View logs for a job')
+    logs_parser.add_argument('--job-id', type=str, help='Job ID to view logs for')
+
     args = parser.parse_args()
 
     cli = BenchmarkCLI()
@@ -561,6 +616,9 @@ Examples:
     elif args.command == 'run':
         recipe_path = Path(args.recipe) if args.recipe else None
         cli.deploy_and_run(recipe_path)
+
+    elif args.command == 'logs':
+        cli.view_logs(args.job_id)
 
     else:
         parser.print_help()

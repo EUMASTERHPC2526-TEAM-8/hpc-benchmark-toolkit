@@ -1,1 +1,1 @@
-{"model": "facebook/opt-1.3b", "duration": "5m", "clients_per_node": 10, "service": "vllm"}
+{"model": "facebook/opt-1.3b", "duration": "15m", "clients_per_node": 10, "service": "vllm"}

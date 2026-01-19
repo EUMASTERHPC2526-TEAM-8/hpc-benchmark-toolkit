@@ -89,6 +89,7 @@ python3 benchmark_cli.py run --recipe src/recipes/ollama_meluxina.yaml
 ssh meluxina "squeue -u $USER"
 
 # Setup tunnels (replace JOBID with your job number)
+cd ..
 ./setup_monitoring.sh JOBID ollama    # For Ollama
 ./setup_monitoring.sh JOBID vllm      # For vLLM
 ```
@@ -142,6 +143,7 @@ open http://localhost:3001
 - Run recipe: `python3 src/benchmark_cli.py run --recipe <path>`
 - Create recipe interactively: `python3 src/benchmark_cli.py create`
 - Full flag list: [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md#cli)
+- See logs: `python3 src/benchmark_cli.py logs`
 
 ## 6. Recipe Configuration (key settings)
 - Schema: [schemas/recipe-format.yaml](schemas/recipe-format.yaml); examples: [src/src/recipes](src/src/recipes).
