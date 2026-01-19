@@ -4,22 +4,6 @@
 
 Benchmarking LLM inference (Ollama, vLLM) on HPC clusters with live Prometheus/Grafana monitoring. Optimized for MeluXina (Slurm + Apptainer).
 
-## Table of Contents
-1. [Overview](#1-overview)
-2. [Architecture](#2-architecture)
-3. [Installation & Setup](#3-installation--setup)
-4. [Quick Start Guide](#4-quick-start-guide)
-5. [CLI Reference](#5-cli-reference)
-6. [Recipe Configuration](#6-recipe-configuration)
-7. [Monitoring & Metrics](#7-monitoring--metrics)
-8. [Distributed Benchmarking](#8-distributed-benchmarking)
-9. [Extending the Framework](#9-extending-the-framework)
-10. [API Reference](#10-api-reference)
-11. [Troubleshooting](#11-troubleshooting)
-12. [Best Practices](#12-best-practices)
-13. [License](#13-license)
-14. [Support](#14-support)
-
 ## 1. Overview
 - Benchmark and compare Ollama and vLLM on HPC with reproducible YAML recipes.
 - Real-time metrics via Prometheus/Grafana (Pushgateway), ready-made dashboards.
