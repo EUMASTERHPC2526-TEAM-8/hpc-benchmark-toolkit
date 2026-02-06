@@ -804,16 +804,26 @@ binds:
 
 \subsection{Recipe Validation}
 
-\begin{placeholder}{Laura's Section}
-Please describe the recipe validation system in detail:
-\begin{itemize}
-    \item JSON Schema validation implementation
-    \item Validation rules and error messages
-    \item Custom validators
-    \item Schema versioning
-    \item Interactive validation mode
-\end{itemize}
-\end{placeholder}
+\subsection{Recipe Validation System}
+
+To ensure correctness, reproducibility, and safe execution of large-scale benchmarks, the framework implements a comprehensive recipe validation system. Before any Slurm job is generated or submitted, the user-provided YAML recipe is validated both structurally and semantically.
+
+\paragraph{JSON Schema Validation}
+At the core of the validation system is a JSON Schema definition that formally specifies the expected structure of a benchmark recipe. The schema enforces required fields, data types, value ranges, and allowed enumerations for all configuration sections, including orchestration, resource allocation, workload parameters, monitoring, and logging. This guarantees that recipes are complete, well-typed, and structurally consistent before execution.
+
+\paragraph{Validation Rules and Error Reporting}
+Validation distinguishes between \emph{blocking errors} and \emph{warnings}. Blocking errors correspond to invalid or incomplete configurations that would lead to incorrect execution, such as missing mandatory fields, incompatible service selections, or invalid resource specifications. In these cases, execution is halted. Warnings are issued for configurations that are technically valid but potentially suboptimal, such as unusually high client counts, short benchmark durations, or atypical resource allocations. All validation messages are reported with clear, field-level context to facilitate rapid correction by the user.
+
+\paragraph{Custom Validators}
+In addition to schema-based checks, the system implements custom validation logic to capture constraints that cannot be expressed declaratively. These include cross-field consistency checks, service-specific requirements, and semantic constraints, such as verifying that inference workloads specify the necessary model and prompt parameters, or that node allocations are consistent with the declared total number of nodes.
+
+\paragraph{Schema Versioning}
+To support long-term maintainability and reproducibility, the validation system includes schema versioning. This allows recipes to be validated against a specific schema version, ensuring that experiments remain reproducible even as the configuration format evolves over time. Backward compatibility can be maintained while enabling controlled extensions of the recipe format.
+
+\paragraph{Interactive Validation Mode}
+The framework provides an interactive validation mode that allows users to validate recipes locally before submission. This enables early detection of configuration issues without consuming HPC resources and improves usability by providing immediate feedback during experiment design.
+
+Overall, the recipe validation system plays a crucial role in preventing invalid job submissions, reducing wasted computational resources, and ensuring consistent and reproducible benchmarking experiments.
 
 \subsection{Parameter Sweeps}
 
@@ -1161,56 +1171,65 @@ open http://localhost:3001  # admin / admin
 \section{Benchmarking Implementation}
 % ============================================================================
 
-\begin{placeholder}{Laura's Section}
-Please provide comprehensive documentation of the benchmarking system:
+\section{Benchmarking System}
+
+This section documents the implementation of the benchmarking subsystem, focusing exclusively on how inference workloads are generated, executed, and measured. The benchmarking logic is implemented at the client side through workload executors and is coordinated by the orchestrator.
 
 \subsection{Workload Executor Implementation}
-\begin{itemize}
-    \item Thread pool management
-    \item Request generation
-    \item Latency measurement
-    \item Error handling
-\end{itemize}
+
+The workload executor is responsible for generating load against inference services and collecting performance metrics. Each executor runs on a client node and exposes an HTTP interface for control and metric retrieval.
+
+\paragraph{Thread Pool Management}
+Concurrency is implemented using a thread-based execution model. Upon receiving a start command, the executor spawns a configurable number of worker threads (\texttt{num\_threads}), each of which independently generates requests. Threads run concurrently for the specified benchmark duration and terminate gracefully once execution completes.
+
+\paragraph{Request Generation}
+Each worker thread repeatedly issues inference requests to the configured service endpoints until the benchmark duration expires. Requests are distributed across available server endpoints using a round-robin strategy to balance load. An optional inter-request delay (\texttt{sleep\_seconds}) allows precise control over request pacing, enabling both latency-focused and throughput-focused benchmarks.
+
+\paragraph{Latency Measurement}
+Latency is measured on a per-request basis as the elapsed wall-clock time between request submission and response reception. Each thread records individual request latencies locally, enabling detailed latency distribution analysis after execution.
+
+\paragraph{Error Handling}
+All request execution is wrapped in exception handling logic. HTTP failures and runtime exceptions are counted as errors and recorded without terminating the benchmark. This ensures that transient failures or service overload conditions are reflected accurately in the collected metrics.
 
 \subsection{Ollama Benchmarking}
-\begin{itemize}
-    \item HellaSwag dataset integration
-    \item Request format
-    \item Response parsing
-    \item Metrics collection
-\end{itemize}
+
+Ollama benchmarking is implemented via a service-specific workload executor targeting the Ollama HTTP inference API.
+
+\paragraph{HellaSwag Dataset Integration}
+To generate realistic inference prompts, the executor integrates the HellaSwag validation dataset. The dataset is loaded once per executor instance and shared across worker threads. Each request samples a random prompt from the dataset, ensuring diversity and avoiding synthetic prompt bias.
+
+\paragraph{Request Format}
+Inference requests are sent to the Ollama \texttt{/api/generate} endpoint using non-streaming mode. Each request specifies the target model and the selected prompt text. Streaming responses are disabled to ensure clear request boundaries and consistent latency measurement.
+
+\paragraph{Response Handling}
+Responses are validated based on HTTP status codes. Successful responses contribute to latency and throughput metrics, while failed responses increment error counters. Response payloads are not parsed further, as token-level usage information is not consistently exposed by the Ollama API.
+
+\paragraph{Metrics Collection}
+Each worker thread reports the total number of requests, error count, cumulative latency, elapsed execution time, and a list of per-request latencies. These thread-level metrics are aggregated at the executor level after benchmark completion.
 
 \subsection{vLLM Benchmarking}
-\begin{itemize}
-    \item OpenAI-compatible API usage
-    \item Streaming vs non-streaming
-    \item Token counting
-    \item Throughput calculation
-\end{itemize}
+
+The benchmarking framework supports vLLM-based inference via its OpenAI-compatible API. In this implementation, benchmarking focuses on non-streaming request execution. While the system supports both single-node and distributed vLLM deployments, streaming behavior and detailed token accounting are not benchmarked in this work.
 
 \subsection{Metrics Collection}
-\begin{itemize}
-    \item Latency percentiles (p50/p90/p99)
-    \item Throughput (requests/second, tokens/second)
-    \item Error rates
-    \item Resource utilization
-\end{itemize}
+
+Metrics are collected hierarchically, starting at the per-request level and aggregated across threads and executors.
+
+\paragraph{Latency Percentiles}
+In addition to average latency, the system computes latency percentiles (p50, p90, p99) from all recorded request latencies. These metrics capture tail latency behavior, which is critical for evaluating inference performance under concurrent load.
+
+\paragraph{Throughput}
+Throughput is calculated as the total number of successful requests divided by the maximum elapsed execution time across threads. This provides a conservative estimate of sustained request processing capacity.
+
+\paragraph{Error Rates}
+Error rates are computed as the ratio of failed requests to total requests. This metric highlights service instability or overload conditions during benchmarking.
+
+\paragraph{Resource Utilization}
+While resource utilization metrics are collected externally via the monitoring subsystem, the benchmarking layer exposes timing and request-level metrics that can be correlated with system-level resource data.
 
 \subsection{Load Patterns}
-\begin{itemize}
-    \item Constant load
-    \item Poisson distribution
-    \item Burst patterns
-\end{itemize}
 
-Please include:
-\begin{itemize}
-    \item Code snippets for key implementations
-    \item Diagrams showing request flow
-    \item Example metrics output
-    \item Performance considerations
-\end{itemize}
-\end{placeholder}
+The implemented benchmarking system generates constant load with configurable concurrency and request pacing. While the framework design allows for more complex load patterns such as Poisson or bursty arrivals, these patterns are not implemented in the current version and are reserved for future work.
 
 % ============================================================================
 \section{Logging System}
@@ -2014,49 +2033,6 @@ apptainer pull docker://vllm/vllm-openai:latest
 # Pull Python container for clients
 apptainer pull docker://python:3.12.3-slim
 \end{lstlisting}
-
-% ============================================================================
-\section{Performance Considerations}
-% ============================================================================
-
-\begin{placeholder}{Performance Analysis - Pending Laura's Benchmarking Results}
-This section will be completed once Laura's benchmarking work is finalized. It will include:
-
-\subsection{Bottleneck Analysis}
-\begin{itemize}
-    \item Latency breakdown for LLM inference
-    \item GPU compute vs memory transfer analysis
-    \item Network overhead measurements
-    \item Tokenization performance impact
-\end{itemize}
-
-\subsection{Optimization Recommendations}
-\begin{itemize}
-    \item Warmup period requirements
-    \item Batch size tuning guidelines
-    \item Tensor parallelism configuration
-    \item Memory utilization optimization
-    \item Client concurrency tuning
-\end{itemize}
-
-\subsection{Scaling Analysis}
-\begin{itemize}
-    \item Single-node vs multi-node performance
-    \item Strong scaling efficiency
-    \item Weak scaling characteristics
-    \item Resource utilization patterns
-\end{itemize}
-
-Please provide:
-\begin{itemize}
-    \item Benchmark results from Ollama and vLLM tests
-    \item Performance charts and graphs
-    \item Latency distributions (p50/p90/p99)
-    \item Throughput measurements
-    \item Resource utilization data
-    \item Optimization recommendations based on findings
-\end{itemize}
-\end{placeholder}
 
 % ============================================================================
 \section{Troubleshooting Guide}
