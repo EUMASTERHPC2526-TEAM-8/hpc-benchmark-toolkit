@@ -1,8 +1,10 @@
 # HPC Benchmark Toolkit
 
-**Last Updated:** January 2026
+**Last Updated:** February 2026
 
 Benchmarking LLM inference (Ollama, vLLM) on HPC clusters with live Prometheus/Grafana monitoring. Optimized for MeluXina (Slurm + Apptainer).
+
+Evaluation report available at [docs/report/evaluation_report.pdf](docs/report/evaluation_report.pdf).
 
 ## 1. Overview
 - Benchmark and compare Ollama and vLLM on HPC with reproducible YAML recipes.
